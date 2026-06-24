@@ -1,0 +1,88 @@
+import 'package:flutter/material.dart';
+
+import '../models/product.dart';
+import '../utils/app_colors.dart';
+
+const mockProducts = [
+  Product(
+    id: 'cafe-sua-da',
+    name: 'Cà phê sữa đá',
+    description: 'Cà phê phin đậm, sữa đặc béo nhẹ, đá mát.',
+    price: 35000,
+    category: 'Cà phê',
+    imageLabel: 'Phin sữa',
+    accentColor: AppColors.caramel,
+    // Thêm ảnh vào images/products/ và mở comment dòng dưới để hiện trên trang chủ.
+    // imageAsset: 'images/products/cafe-sua-da.png',
+  ),
+  Product(
+    id: 'bac-xiu',
+    name: 'Bạc xỉu',
+    description: 'Sữa thơm béo hòa cùng vị cà phê dịu nhẹ.',
+    price: 39000,
+    category: 'Cà phê',
+    imageLabel: 'Bạc xỉu',
+    accentColor: Color(0xFFD9A76C),
+    imageAsset: 'images/products/images (1).jpg',
+  ),
+  Product(
+    id: 'cafe-den-da',
+    name: 'Cà phê đen đá',
+    description: 'Đậm vị rang xay, hậu vị mạnh và tỉnh táo.',
+    price: 32000,
+    category: 'Cà phê',
+    imageLabel: 'Đen đá',
+    accentColor: Color(0xFF55331F),
+    // imageAsset: 'images/products/cafe-den-da.png',
+  ),
+  Product(
+    id: 'cafe-muoi',
+    name: 'Cà phê muối',
+    description: 'Kem muối mịn, vị mặn nhẹ cân bằng cà phê.',
+    price: 45000,
+    category: 'Cà phê',
+    imageLabel: 'Muối kem',
+    accentColor: Color(0xFFB48A61),
+    // imageAsset: 'images/products/cafe-muoi.png',
+  ),
+  Product(
+    id: 'tra-dao-cam-sa',
+    name: 'Trà đào cam sả',
+    description: 'Trà thanh mát cùng đào, cam vàng và sả thơm.',
+    price: 42000,
+    category: 'Trà',
+    imageLabel: 'Đào cam',
+    accentColor: Color(0xFFF09A4A),
+    // imageAsset: 'images/products/tra-dao-cam-sa.png',
+  ),
+  Product(
+    id: 'tra-sua-tran-chau',
+    name: 'Trà sữa trân châu',
+    description: 'Trà sữa ngọt dịu, trân châu dẻo dai.',
+    price: 48000,
+    category: 'Trà sữa',
+    imageLabel: 'Trân châu',
+    accentColor: Color(0xFFC88B5A),
+    // imageAsset: 'images/products/tra-sua-tran-chau.png',
+  ),
+  Product(
+    id: 'matcha-da-xay',
+    name: 'Matcha đá xay',
+    description: 'Matcha thơm béo, đá xay mịn, kem tươi nhẹ.',
+    price: 55000,
+    category: 'Đá xay',
+    imageLabel: 'Matcha',
+    accentColor: Color(0xFF6D9C58),
+    // imageAsset: 'images/products/matcha-da-xay.png',
+  ),
+  Product(
+    id: 'banh-tiramisu',
+    name: 'Bánh tiramisu',
+    description: 'Bánh mềm, kem mascarpone và lớp cà phê thơm.',
+    price: 59000,
+    category: 'Bánh ngọt',
+    imageLabel: 'Tiramisu',
+    accentColor: Color(0xFF8B5D3B),
+    // imageAsset: 'images/products/banh-tiramisu.png',
+  ),
+];

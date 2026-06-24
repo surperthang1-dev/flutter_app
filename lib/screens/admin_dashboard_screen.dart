@@ -1,0 +1,1424 @@
+import 'package:flutter/material.dart';
+
+import '../models/admin_order.dart';
+import '../models/product.dart';
+import '../providers/auth_provider.dart';
+import '../services/admin_repository.dart';
+import '../utils/app_colors.dart';
+import '../utils/currency_formatter.dart';
+import '../widgets/primary_button.dart';
+import '../widgets/product_visual.dart';
+import 'login_screen.dart';
+
+class AdminDashboardScreen extends StatefulWidget {
+  const AdminDashboardScreen({super.key});
+
+  @override
+  State<AdminDashboardScreen> createState() => _AdminDashboardScreenState();
+}
+
+class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
+  int _index = 0;
+
+  void _logout() {
+    AuthScope.of(context).signOut();
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (route) => false,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pages = const [
+      AdminHomePage(),
+      AdminProductsPage(),
+      AdminOrdersPage(),
+      AdminStatsPage(),
+      AdminInvoicePage(),
+    ];
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        title: const Text('Quản trị Coffee Việt 24H'),
+        backgroundColor: AppColors.background,
+        actions: [
+          IconButton(
+            tooltip: 'Đăng xuất',
+            onPressed: _logout,
+            icon: const Icon(Icons.logout_rounded),
+          ),
+        ],
+      ),
+      body: IndexedStack(index: _index, children: pages),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _index,
+        onDestinationSelected: (value) => setState(() => _index = value),
+        backgroundColor: AppColors.surface,
+        indicatorColor: AppColors.caramel.withValues(alpha: 0.22),
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.dashboard_outlined),
+            selectedIcon: Icon(Icons.dashboard_rounded),
+            label: 'Tổng quan',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.coffee_outlined),
+            selectedIcon: Icon(Icons.coffee_rounded),
+            label: 'Sản phẩm',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.receipt_outlined),
+            selectedIcon: Icon(Icons.receipt_rounded),
+            label: 'Đơn hàng',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.bar_chart_outlined),
+            selectedIcon: Icon(Icons.bar_chart_rounded),
+            label: 'Thống kê',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.file_download_outlined),
+            selectedIcon: Icon(Icons.file_download_rounded),
+            label: 'Hoá đơn',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class AdminHomePage extends StatefulWidget {
+  const AdminHomePage({super.key});
+
+  @override
+  State<AdminHomePage> createState() => _AdminHomePageState();
+}
+
+class _AdminHomePageState extends State<AdminHomePage> {
+  final _repository = const AdminRepository();
+  late Future<AdminSummary> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _repository.fetchSummary();
+  }
+
+  void _refresh() {
+    setState(() => _future = _repository.fetchSummary());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final user = AuthScope.of(context).user;
+    return RefreshIndicator(
+      onRefresh: () async => _refresh(),
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(18, 12, 18, 120),
+        children: [
+          _AdminHeader(name: user?.fullName ?? 'Admin'),
+          const SizedBox(height: 18),
+          FutureBuilder<AdminSummary>(
+            future: _future,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState != ConnectionState.done) {
+                return const _LoadingBlock();
+              }
+              if (snapshot.hasError) return _ErrorBlock(error: snapshot.error);
+              return _SummaryGrid(summary: snapshot.data!);
+            },
+          ),
+          const SizedBox(height: 18),
+          const _InfoPanel(
+            icon: Icons.verified_user_rounded,
+            title: 'Quyền quản trị',
+            body:
+                'Admin có quyền thêm, sửa, ẩn sản phẩm, xem đơn hàng, theo dõi doanh thu và xuất hoá đơn từ PostgreSQL.',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class AdminProductsPage extends StatefulWidget {
+  const AdminProductsPage({super.key});
+
+  @override
+  State<AdminProductsPage> createState() => _AdminProductsPageState();
+}
+
+class _AdminProductsPageState extends State<AdminProductsPage> {
+  final _repository = const AdminRepository();
+  late Future<List<Product>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _repository.fetchProducts();
+  }
+
+  void _refresh() {
+    setState(() => _future = _repository.fetchProducts());
+  }
+
+  Future<void> _openEditor([Product? product]) async {
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _ProductEditor(
+        product: product,
+        onSave: _repository.saveProduct,
+        onPickImage: _repository.pickAndStoreProductImage,
+      ),
+    );
+    if (saved == true) _refresh();
+  }
+
+  Future<void> _deleteProduct(Product product) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Ẩn sản phẩm'),
+        content: Text('Ẩn "${product.name}" khỏi menu đang bán?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Huỷ'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Ẩn'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await _repository.deleteProduct(product.id);
+    _refresh();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<Product>>(
+      future: _future,
+      builder: (context, snapshot) {
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(18, 12, 18, 120),
+          children: [
+            _PageTitle(
+              title: 'Sản phẩm',
+              subtitle:
+                  'CRUD menu coffee và ảnh sản phẩm ánh xạ trực tiếp PostgreSQL.',
+              action: IconButton.filled(
+                tooltip: 'Thêm sản phẩm',
+                onPressed: () => _openEditor(),
+                icon: const Icon(Icons.add_rounded),
+              ),
+            ),
+            const SizedBox(height: 14),
+            if (snapshot.connectionState != ConnectionState.done)
+              const _LoadingBlock()
+            else if (snapshot.hasError)
+              _ErrorBlock(error: snapshot.error)
+            else if (snapshot.data!.isEmpty)
+              const _EmptyBlock(
+                icon: Icons.coffee_rounded,
+                title: 'Chưa có sản phẩm',
+                body: 'Bấm nút thêm để tạo món đầu tiên cho menu.',
+              )
+            else
+              ...snapshot.data!.map(
+                (product) => _ProductAdminTile(
+                  product: product,
+                  onEdit: () => _openEditor(product),
+                  onDelete: () => _deleteProduct(product),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class AdminOrdersPage extends StatefulWidget {
+  const AdminOrdersPage({super.key});
+
+  @override
+  State<AdminOrdersPage> createState() => _AdminOrdersPageState();
+}
+
+class _AdminOrdersPageState extends State<AdminOrdersPage> {
+  final _repository = const AdminRepository();
+  late Future<List<AdminOrder>> _future;
+  String? _exportingId;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _repository.fetchOrders();
+  }
+
+  void _refresh() {
+    setState(() => _future = _repository.fetchOrders());
+  }
+
+  Future<void> _export(AdminOrder order) async {
+    if (_exportingId != null) return;
+    setState(() => _exportingId = order.id);
+    try {
+      final path = await _repository.exportInvoice(order.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Đã xuất hoá đơn: $path'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _exportingId = null);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<AdminOrder>>(
+      future: _future,
+      builder: (context, snapshot) {
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(18, 12, 18, 120),
+          children: [
+            _PageTitle(
+              title: 'Đơn hàng',
+              subtitle:
+                  'Đơn mới tạo từ app được lưu trong bảng orders và order_items.',
+              action: IconButton.filled(
+                tooltip: 'Làm mới',
+                onPressed: _refresh,
+                icon: const Icon(Icons.refresh_rounded),
+              ),
+            ),
+            const SizedBox(height: 14),
+            if (snapshot.connectionState != ConnectionState.done)
+              const _LoadingBlock()
+            else if (snapshot.hasError)
+              _ErrorBlock(error: snapshot.error)
+            else if (snapshot.data!.isEmpty)
+              const _EmptyBlock(
+                icon: Icons.receipt_long_rounded,
+                title: 'Chưa có đơn hàng',
+                body: 'Khi khách thanh toán, đơn sẽ xuất hiện ở đây.',
+              )
+            else
+              ...snapshot.data!.map(
+                (order) => _OrderTile(
+                  order: order,
+                  isExporting: _exportingId == order.id,
+                  onExport: () => _export(order),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class AdminStatsPage extends StatefulWidget {
+  const AdminStatsPage({super.key});
+
+  @override
+  State<AdminStatsPage> createState() => _AdminStatsPageState();
+}
+
+class _AdminStatsPageState extends State<AdminStatsPage> {
+  final _repository = const AdminRepository();
+  late Future<AdminSummary> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _repository.fetchSummary();
+  }
+
+  void _refresh() {
+    setState(() => _future = _repository.fetchSummary());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 12, 18, 120),
+      children: [
+        _PageTitle(
+          title: 'Thống kê',
+          subtitle: 'Theo dõi dữ liệu vận hành từ PostgreSQL.',
+          action: IconButton.filled(
+            tooltip: 'Làm mới',
+            onPressed: _refresh,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+        ),
+        const SizedBox(height: 14),
+        FutureBuilder<AdminSummary>(
+          future: _future,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return const _LoadingBlock();
+            }
+            if (snapshot.hasError) return _ErrorBlock(error: snapshot.error);
+            final summary = snapshot.data!;
+            return Column(
+              children: [
+                _StatRow('Doanh thu hôm nay', formatVnd(summary.todayRevenue)),
+                _StatRow('Tổng doanh thu', formatVnd(summary.revenue)),
+                _StatRow('Tổng đơn hàng', summary.orderCount.toString()),
+                _StatRow('Sản phẩm đang bán', summary.productCount.toString()),
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class AdminInvoicePage extends StatefulWidget {
+  const AdminInvoicePage({super.key});
+
+  @override
+  State<AdminInvoicePage> createState() => _AdminInvoicePageState();
+}
+
+class _AdminInvoicePageState extends State<AdminInvoicePage> {
+  final _repository = const AdminRepository();
+  bool _isExportingOrder = false;
+  bool _isExportingMenu = false;
+
+  Future<void> _exportLatestOrder() async {
+    if (_isExportingOrder) return;
+    setState(() => _isExportingOrder = true);
+    try {
+      final path = await _repository.exportInvoice();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Đã xuất hoá đơn đơn hàng: $path'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isExportingOrder = false);
+    }
+  }
+
+  Future<void> _exportMenu() async {
+    if (_isExportingMenu) return;
+    setState(() => _isExportingMenu = true);
+    try {
+      final path = await _repository.exportMenuInvoice();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Đã xuất bảng giá menu: $path'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isExportingMenu = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 12, 18, 120),
+      children: [
+        const _PageTitle(
+          title: 'Hoá đơn',
+          subtitle: 'Xuất file .txt từ dữ liệu PostgreSQL.',
+        ),
+        const SizedBox(height: 14),
+        const _InfoPanel(
+          icon: Icons.receipt_long_rounded,
+          title: 'Hoá đơn đơn hàng',
+          body:
+              'Xuất hoá đơn cho đơn mới nhất, gồm thông tin khách hàng, món đã mua, phí giao hàng và tổng thanh toán.',
+        ),
+        const SizedBox(height: 14),
+        PrimaryButton(
+          label: _isExportingOrder
+              ? 'Đang xuất...'
+              : 'Xuất hoá đơn đơn mới nhất',
+          icon: Icons.download_rounded,
+          onPressed: _isExportingOrder ? null : _exportLatestOrder,
+        ),
+        const SizedBox(height: 22),
+        const _InfoPanel(
+          icon: Icons.menu_book_rounded,
+          title: 'Bảng giá menu',
+          body: 'Xuất danh sách sản phẩm đang bán để đối soát hoặc in menu.',
+        ),
+        const SizedBox(height: 14),
+        PrimaryButton(
+          label: _isExportingMenu ? 'Đang xuất...' : 'Xuất bảng giá menu',
+          icon: Icons.file_download_rounded,
+          onPressed: _isExportingMenu ? null : _exportMenu,
+        ),
+      ],
+    );
+  }
+}
+
+class _AdminHeader extends StatelessWidget {
+  const _AdminHeader({required this.name});
+
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.coffeeDark,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: AppColors.caramel.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              color: AppColors.caramel,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: const Icon(Icons.admin_panel_settings_rounded),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Điều hành menu, đơn hàng và doanh thu',
+                  style: TextStyle(
+                    color: AppColors.caramel,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PageTitle extends StatelessWidget {
+  const _PageTitle({required this.title, required this.subtitle, this.action});
+
+  final String title;
+  final String subtitle;
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  color: AppColors.textDark,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                style: const TextStyle(
+                  color: AppColors.textMuted,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+        ?action,
+      ],
+    );
+  }
+}
+
+class _SummaryGrid extends StatelessWidget {
+  const _SummaryGrid({required this.summary});
+
+  final AdminSummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final items = [
+      _SummaryItem(
+        'Doanh thu',
+        formatVnd(summary.revenue),
+        Icons.payments_rounded,
+      ),
+      _SummaryItem(
+        'Đơn hàng',
+        summary.orderCount.toString(),
+        Icons.receipt_rounded,
+      ),
+      _SummaryItem(
+        'Sản phẩm',
+        summary.productCount.toString(),
+        Icons.coffee_rounded,
+      ),
+      _SummaryItem(
+        'User',
+        summary.userCount.toString(),
+        Icons.people_alt_rounded,
+      ),
+    ];
+
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: items.length,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: 1.55,
+      ),
+      itemBuilder: (context, index) {
+        final item = items[index];
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Icon(item.icon, color: AppColors.caramel),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.textDark,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  Text(
+                    item.label,
+                    style: const TextStyle(
+                      color: AppColors.textMuted,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ProductAdminTile extends StatelessWidget {
+  const _ProductAdminTile({
+    required this.product,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  final Product product;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 58,
+            height: 58,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: ProductVisual(product: product, height: 58, iconSize: 22),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  product.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.textDark,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${product.category} - ${formatVnd(product.price)}',
+                  style: const TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: 'Sửa',
+            onPressed: onEdit,
+            icon: const Icon(Icons.edit_rounded),
+          ),
+          IconButton(
+            tooltip: 'Ẩn',
+            onPressed: onDelete,
+            icon: const Icon(Icons.visibility_off_outlined),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OrderTile extends StatelessWidget {
+  const _OrderTile({
+    required this.order,
+    required this.isExporting,
+    required this.onExport,
+  });
+
+  final AdminOrder order;
+  final bool isExporting;
+  final VoidCallback onExport;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '#${order.shortId} - ${order.customerName}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.textDark,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.caramel.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  _statusLabel(order.status),
+                  style: const TextStyle(
+                    color: AppColors.caramel,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '${order.customerPhone} - ${order.deliveryAddress}',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: AppColors.textMuted,
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _MiniChip('${order.itemCount} món'),
+              _MiniChip(order.paymentMethod),
+              _MiniChip(formatVnd(order.total)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ...order.items
+              .take(3)
+              .map(
+                (item) => Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text(
+                    '${item.productName} x${item.quantity} (${item.size}, đường ${item.sugar}, đá ${item.ice})',
+                    style: const TextStyle(
+                      color: AppColors.textDark,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: isExporting ? null : onExport,
+              icon: Icon(
+                isExporting
+                    ? Icons.hourglass_empty_rounded
+                    : Icons.download_rounded,
+              ),
+              label: Text(isExporting ? 'Đang xuất' : 'Xuất hoá đơn'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _statusLabel(String status) {
+    switch (status) {
+      case 'pending':
+        return 'Chờ xử lý';
+      case 'preparing':
+        return 'Đang pha chế';
+      case 'delivering':
+        return 'Đang giao';
+      case 'completed':
+        return 'Hoàn tất';
+      default:
+        return status;
+    }
+  }
+}
+
+class _ProductEditor extends StatefulWidget {
+  const _ProductEditor({
+    required this.product,
+    required this.onSave,
+    required this.onPickImage,
+  });
+
+  final Product? product;
+  final Future<void> Function(Product product) onSave;
+  final Future<String?> Function(String idHint) onPickImage;
+
+  @override
+  State<_ProductEditor> createState() => _ProductEditorState();
+}
+
+class _ProductEditorState extends State<_ProductEditor> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _idController;
+  late final TextEditingController _nameController;
+  late final TextEditingController _descriptionController;
+  late final TextEditingController _priceController;
+  late final TextEditingController _categoryController;
+  late final TextEditingController _labelController;
+  late final TextEditingController _imageController;
+  Color _accentColor = AppColors.caramel;
+  bool _isSaving = false;
+  bool _isPickingImage = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final product = widget.product;
+    _idController = TextEditingController(text: product?.id ?? '');
+    _nameController = TextEditingController(text: product?.name ?? '');
+    _descriptionController = TextEditingController(
+      text: product?.description ?? '',
+    );
+    _priceController = TextEditingController(
+      text: product?.price.toString() ?? '',
+    );
+    _categoryController = TextEditingController(
+      text: product?.category ?? 'Cà phê',
+    );
+    _labelController = TextEditingController(text: product?.imageLabel ?? '');
+    _imageController = TextEditingController(text: product?.imageAsset ?? '');
+    _accentColor = product?.accentColor ?? AppColors.caramel;
+  }
+
+  @override
+  void dispose() {
+    _idController.dispose();
+    _nameController.dispose();
+    _descriptionController.dispose();
+    _priceController.dispose();
+    _categoryController.dispose();
+    _labelController.dispose();
+    _imageController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate() || _isSaving) return;
+    setState(() => _isSaving = true);
+    final id = _idController.text.trim().isEmpty
+        ? _slug(_nameController.text)
+        : _idController.text.trim();
+    final product = Product(
+      id: id,
+      name: _nameController.text.trim(),
+      description: _descriptionController.text.trim(),
+      price: int.parse(_priceController.text.trim()),
+      category: _categoryController.text.trim(),
+      imageLabel: _labelController.text.trim(),
+      accentColor: _accentColor,
+      imageAsset: _imageController.text.trim().isEmpty
+          ? null
+          : _imageController.text.trim(),
+    );
+
+    try {
+      await widget.onSave(product);
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Không thể lưu sản phẩm: $error')));
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  Future<void> _pickImage() async {
+    if (_isPickingImage) return;
+    setState(() => _isPickingImage = true);
+    try {
+      final path = await widget.onPickImage(
+        _idController.text.trim().isEmpty
+            ? _nameController.text.trim()
+            : _idController.text.trim(),
+      );
+      if (path == null || !mounted) return;
+      setState(() => _imageController.text = path);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
+    } finally {
+      if (mounted) setState(() => _isPickingImage = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.of(context).viewInsets.bottom;
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottom),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+        decoration: const BoxDecoration(
+          color: AppColors.background,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  widget.product == null ? 'Thêm sản phẩm' : 'Sửa sản phẩm',
+                  style: const TextStyle(
+                    color: AppColors.textDark,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                AnimatedBuilder(
+                  animation: Listenable.merge([
+                    _nameController,
+                    _descriptionController,
+                    _priceController,
+                    _categoryController,
+                    _labelController,
+                    _imageController,
+                  ]),
+                  builder: (context, _) {
+                    final preview = Product(
+                      id: _idController.text.trim().isEmpty
+                          ? 'preview'
+                          : _idController.text.trim(),
+                      name: _nameController.text.trim().isEmpty
+                          ? 'Tên sản phẩm'
+                          : _nameController.text.trim(),
+                      description: _descriptionController.text.trim().isEmpty
+                          ? 'Mô tả sản phẩm'
+                          : _descriptionController.text.trim(),
+                      price: int.tryParse(_priceController.text.trim()) ?? 0,
+                      category: _categoryController.text.trim().isEmpty
+                          ? 'Danh mục'
+                          : _categoryController.text.trim(),
+                      imageLabel: _labelController.text.trim().isEmpty
+                          ? 'Ảnh'
+                          : _labelController.text.trim(),
+                      accentColor: _accentColor,
+                      imageAsset: _imageController.text.trim().isEmpty
+                          ? null
+                          : _imageController.text.trim(),
+                    );
+                    return ClipRRect(
+                      borderRadius: BorderRadius.circular(18),
+                      child: ProductVisual(
+                        product: preview,
+                        height: 140,
+                        iconSize: 34,
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _idController,
+                  enabled: widget.product == null,
+                  decoration: const InputDecoration(
+                    labelText: 'Mã sản phẩm',
+                    hintText: 'Tự tạo nếu bỏ trống',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _nameController,
+                  decoration: const InputDecoration(labelText: 'Tên sản phẩm'),
+                  validator: _required,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _descriptionController,
+                  minLines: 2,
+                  maxLines: 3,
+                  decoration: const InputDecoration(labelText: 'Mô tả'),
+                  validator: _required,
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextFormField(
+                        controller: _priceController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: 'Giá'),
+                        validator: _price,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextFormField(
+                        controller: _categoryController,
+                        decoration: const InputDecoration(
+                          labelText: 'Danh mục',
+                        ),
+                        validator: _required,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _labelController,
+                  decoration: const InputDecoration(labelText: 'Nhãn ảnh'),
+                  validator: _required,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _imageController,
+                  decoration: const InputDecoration(
+                    labelText: 'Ảnh sản phẩm (image_asset)',
+                    hintText: 'Chọn ảnh hoặc nhập đường dẫn ảnh',
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _isPickingImage ? null : _pickImage,
+                    icon: Icon(
+                      _isPickingImage
+                          ? Icons.hourglass_empty_rounded
+                          : Icons.image_rounded,
+                    ),
+                    label: Text(
+                      _isPickingImage ? 'Đang chọn ảnh...' : 'Chọn ảnh từ máy',
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                const _DbMappingNote(),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    const Text(
+                      'Màu nhấn',
+                      style: TextStyle(
+                        color: AppColors.textMuted,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const Spacer(),
+                    for (final color in const [
+                      AppColors.caramel,
+                      AppColors.orange,
+                      AppColors.success,
+                      Color(0xFF8B5D3B),
+                    ])
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8),
+                        child: InkWell(
+                          onTap: () => setState(() => _accentColor = color),
+                          borderRadius: BorderRadius.circular(999),
+                          child: Container(
+                            width: 30,
+                            height: 30,
+                            decoration: BoxDecoration(
+                              color: color,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: _accentColor == color
+                                    ? AppColors.coffee
+                                    : AppColors.border,
+                                width: 2,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                PrimaryButton(
+                  label: _isSaving ? 'Đang lưu...' : 'Lưu sản phẩm',
+                  icon: Icons.save_rounded,
+                  onPressed: _isSaving ? null : _save,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String? _required(String? value) {
+    if ((value ?? '').trim().isEmpty) return 'Không được bỏ trống.';
+    return null;
+  }
+
+  String? _price(String? value) {
+    final parsed = int.tryParse((value ?? '').trim());
+    if (parsed == null || parsed <= 0) return 'Giá chưa hợp lệ.';
+    return null;
+  }
+
+  String _slug(String value) {
+    final slug = value
+        .toLowerCase()
+        .trim()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+        .replaceAll(RegExp(r'^-|-$'), '');
+    if (slug.isEmpty) return 'sp-${DateTime.now().millisecondsSinceEpoch}';
+    return slug;
+  }
+}
+
+class _StatRow extends StatelessWidget {
+  const _StatRow(this.label, this.value);
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: AppColors.textMuted,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              color: AppColors.textDark,
+              fontSize: 16,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DbMappingNote extends StatelessWidget {
+  const _DbMappingNote();
+
+  @override
+  Widget build(BuildContext context) {
+    const mappings = [
+      'Mã -> id',
+      'Tên -> name',
+      'Mô tả -> description',
+      'Giá -> price',
+      'Danh mục -> category',
+      'Nhãn ảnh -> image_label',
+      'Ảnh -> image_asset',
+      'Màu -> accent_color',
+    ];
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.caramel.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.caramel.withValues(alpha: 0.18)),
+      ),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: mappings.map((item) => _MiniChip(item)).toList(),
+      ),
+    );
+  }
+}
+
+class _InfoPanel extends StatelessWidget {
+  const _InfoPanel({
+    required this.icon,
+    required this.title,
+    required this.body,
+  });
+
+  final IconData icon;
+  final String title;
+  final String body;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: AppColors.caramel, size: 30),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: AppColors.textDark,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  body,
+                  style: const TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 12.5,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MiniChip extends StatelessWidget {
+  const _MiniChip(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: AppColors.textMuted,
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyBlock extends StatelessWidget {
+  const _EmptyBlock({
+    required this.icon,
+    required this.title,
+    required this.body,
+  });
+
+  final IconData icon;
+  final String title;
+  final String body;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(28),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: AppColors.caramel, size: 38),
+          const SizedBox(height: 10),
+          Text(
+            title,
+            style: const TextStyle(
+              color: AppColors.textDark,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            body,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: AppColors.textMuted),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LoadingBlock extends StatelessWidget {
+  const _LoadingBlock();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.all(32),
+      child: Center(child: CircularProgressIndicator()),
+    );
+  }
+}
+
+class _ErrorBlock extends StatelessWidget {
+  const _ErrorBlock({required this.error});
+
+  final Object? error;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Text(
+        error.toString(),
+        textAlign: TextAlign.center,
+        style: const TextStyle(color: AppColors.textMuted),
+      ),
+    );
+  }
+}
+
+class _SummaryItem {
+  const _SummaryItem(this.label, this.value, this.icon);
+
+  final String label;
+  final String value;
+  final IconData icon;
+}
