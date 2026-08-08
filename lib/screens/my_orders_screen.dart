@@ -9,17 +9,32 @@ import '../utils/currency_formatter.dart';
 import 'order_tracking_screen.dart';
 
 class MyOrdersScreen extends StatefulWidget {
-  const MyOrdersScreen({super.key});
+  const MyOrdersScreen({super.key, required this.isActive});
+
+  final bool isActive;
 
   @override
   State<MyOrdersScreen> createState() => _MyOrdersScreenState();
 }
 
-class _MyOrdersScreenState extends State<MyOrdersScreen> {
+class _MyOrdersScreenState extends State<MyOrdersScreen>
+    with WidgetsBindingObserver {
   final _repository = const OrderRepository();
   Future<List<AdminOrder>>? _future;
   String? _userId;
   _OrderGroup _group = _OrderGroup.processing;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
 
   @override
   void didChangeDependencies() {
@@ -30,19 +45,36 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
     _future = _repository.fetchOrdersForUser(user.id);
   }
 
+  @override
+  void didUpdateWidget(covariant MyOrdersScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive && !oldWidget.isActive) {
+      _refresh();
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && widget.isActive) {
+      _refresh();
+    }
+  }
+
   Future<void> _refresh() async {
     final user = AuthScope.of(context).user;
     if (user == null) return;
-    setState(() => _future = _repository.fetchOrdersForUser(user.id));
-    await _future;
+    late final Future<List<AdminOrder>> future;
+    setState(() {
+      future = _repository.fetchOrdersForUser(user.id);
+      _future = future;
+    });
+    await future;
   }
 
   List<AdminOrder> _filter(List<AdminOrder> orders) {
     return orders.where((order) {
       return switch (_group) {
-        _OrderGroup.processing =>
-          order.orderStatus != OrderStatus.completed &&
-              order.orderStatus != OrderStatus.cancelled,
+        _OrderGroup.processing => order.orderStatus.isProcessing,
         _OrderGroup.completed => order.orderStatus == OrderStatus.completed,
         _OrderGroup.cancelled => order.orderStatus == OrderStatus.cancelled,
       };
@@ -201,6 +233,24 @@ class _MyOrderCard extends StatelessWidget {
               style: const TextStyle(color: AppColors.textMuted),
             ),
             const SizedBox(height: 10),
+            Text(
+              '${order.itemCount} món · Tiền sản phẩm ${formatVnd(order.subtotal)}',
+              style: const TextStyle(
+                color: AppColors.textMuted,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              'Phí giao ${formatVnd(order.deliveryFee)}${order.discountAmount > 0 ? ' · Giảm ${formatVnd(order.discountAmount)}' : ''}',
+              style: const TextStyle(
+                color: AppColors.textMuted,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 10),
             Row(
               children: [
                 Icon(
@@ -211,7 +261,7 @@ class _MyOrderCard extends StatelessWidget {
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    '${order.createdAt.day.toString().padLeft(2, '0')}/${order.createdAt.month.toString().padLeft(2, '0')}/${order.createdAt.year}',
+                    '${order.createdAt.day.toString().padLeft(2, '0')}/${order.createdAt.month.toString().padLeft(2, '0')}/${order.createdAt.year} ${order.createdAt.hour.toString().padLeft(2, '0')}:${order.createdAt.minute.toString().padLeft(2, '0')}',
                     style: const TextStyle(
                       color: AppColors.textMuted,
                       fontSize: 12,
@@ -226,6 +276,15 @@ class _MyOrderCard extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 4),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: onTap,
+                icon: const Icon(Icons.receipt_long_outlined, size: 17),
+                label: const Text('Xem chi tiết'),
+              ),
             ),
           ],
         ),

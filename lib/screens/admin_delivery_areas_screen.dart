@@ -37,8 +37,12 @@ class _AdminDeliveryAreasScreenState extends State<AdminDeliveryAreasScreen> {
   }
 
   Future<void> _refresh() async {
-    setState(() => _future = _repository.fetchAreas(includeInactive: true));
-    await _future;
+    late final Future<List<DeliveryArea>> future;
+    setState(() {
+      future = _repository.fetchAreas(includeInactive: true);
+      _future = future;
+    });
+    await future;
   }
 
   Future<void> _edit(DeliveryArea area) async {

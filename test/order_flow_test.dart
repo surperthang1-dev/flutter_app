@@ -83,6 +83,12 @@ void main() {
         ),
         isFalse,
       );
+      expect(OrderStatus.pending.isProcessing, isTrue);
+      expect(OrderStatus.confirmed.isProcessing, isTrue);
+      expect(OrderStatus.preparing.isProcessing, isTrue);
+      expect(OrderStatus.delivering.isProcessing, isTrue);
+      expect(OrderStatus.completed.isProcessing, isFalse);
+      expect(OrderStatus.cancelled.isProcessing, isFalse);
       expect(
         workflow.canTransition(
           from: OrderStatus.cancelled,
@@ -238,6 +244,7 @@ CartItem _cartItem({int quantity = 1}) {
       description: 'Sản phẩm kiểm thử',
       price: 35000,
       category: 'Cà phê',
+      categoryId: 'test-category',
       imageLabel: 'Cà phê',
       accentColor: AppColors.caramel,
     ),

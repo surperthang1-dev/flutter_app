@@ -32,10 +32,13 @@ class PostgresAuthRepository {
             users.phone,
             users.email,
             users.role,
+            users.is_active,
             users.address,
             users.address_detail,
             users.address_note,
             users.delivery_area_id,
+            users.created_at,
+            users.updated_at,
             areas.name AS delivery_area_name
           FROM app_users users
           LEFT JOIN delivery_areas areas ON areas.id = users.delivery_area_id
@@ -50,7 +53,14 @@ class PostgresAuthRepository {
         throw const AuthException('Số điện thoại hoặc mật khẩu không đúng.');
       }
 
-      return AuthUser.fromColumnMap(rows.first.toColumnMap());
+      final data = rows.first.toColumnMap();
+      if ((data['is_active'] as bool?) == false) {
+        throw const AuthException(
+          'Tài khoản đã bị khóa. Vui lòng liên hệ cửa hàng.',
+        );
+      }
+
+      return AuthUser.fromColumnMap(data);
     } finally {
       await connection.close();
     }
@@ -75,6 +85,7 @@ class PostgresAuthRepository {
             phone,
             email,
             role,
+            is_active,
             password_hash,
             address,
             address_detail,
@@ -86,6 +97,7 @@ class PostgresAuthRepository {
             @phone,
             NULLIF(@email, ''),
             0,
+            TRUE,
             encode(digest(@password, 'sha256'), 'hex'),
             NULLIF(@addressDetail, ''),
             NULLIF(@addressDetail, ''),
@@ -103,10 +115,13 @@ class PostgresAuthRepository {
             phone,
             email,
             role,
+            is_active,
             address,
             address_detail,
             address_note,
             delivery_area_id,
+            created_at,
+            updated_at,
             (
               SELECT name
               FROM delivery_areas

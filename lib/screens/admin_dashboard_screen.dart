@@ -2,13 +2,18 @@ import 'package:flutter/material.dart';
 
 import '../models/admin_order.dart';
 import '../models/product.dart';
+import '../models/product_category.dart';
 import '../providers/auth_provider.dart';
 import '../services/admin_repository.dart';
+import '../services/category_repository.dart';
 import '../utils/app_colors.dart';
 import '../utils/currency_formatter.dart';
 import '../widgets/primary_button.dart';
 import '../widgets/product_visual.dart';
 import 'admin_delivery_areas_screen.dart';
+import 'admin_accounts_screen.dart';
+import 'admin_categories_screen.dart';
+import 'admin_discounts_screen.dart';
 import 'admin_order_detail_screen.dart';
 import 'login_screen.dart';
 
@@ -32,18 +37,40 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final user = AuthScope.of(context).user;
+    if (user == null || !user.isAdmin) {
+      return const Scaffold(
+        body: Center(
+          child: Text('Bạn không có quyền truy cập khu vực quản trị.'),
+        ),
+      );
+    }
+
     final pages = const [
       AdminHomePage(),
-      AdminProductsPage(),
       AdminOrdersPage(),
+      AdminProductsPage(),
+      AdminCategoriesPage(),
+      AdminDiscountsPage(),
+      AdminAccountsPage(),
       AdminStatsPage(),
       AdminInvoicePage(),
+    ];
+    const titles = [
+      'Tổng quan',
+      'Đơn hàng',
+      'Sản phẩm',
+      'Danh mục',
+      'Mã giảm giá',
+      'Tài khoản',
+      'Thống kê',
+      'Hoá đơn',
     ];
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Quản trị Coffee Việt 24H'),
+        title: Text(titles[_index]),
         backgroundColor: AppColors.background,
         actions: [
           IconButton(
@@ -64,40 +91,80 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           ),
         ],
       ),
-      body: IndexedStack(index: _index, children: pages),
-      bottomNavigationBar: NavigationBar(
+      drawer: NavigationDrawer(
         selectedIndex: _index,
-        onDestinationSelected: (value) => setState(() => _index = value),
-        backgroundColor: AppColors.surface,
-        indicatorColor: AppColors.caramel.withValues(alpha: 0.22),
-        destinations: const [
-          NavigationDestination(
+        onDestinationSelected: (value) {
+          Navigator.of(context).pop();
+          setState(() => _index = value);
+        },
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(28, 26, 16, 14),
+            child: Text(
+              'Coffee Việt 24H',
+              style: TextStyle(
+                color: AppColors.coffee,
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          const NavigationDrawerDestination(
             icon: Icon(Icons.dashboard_outlined),
             selectedIcon: Icon(Icons.dashboard_rounded),
-            label: 'Tổng quan',
+            label: Text('Tổng quan'),
           ),
-          NavigationDestination(
-            icon: Icon(Icons.coffee_outlined),
-            selectedIcon: Icon(Icons.coffee_rounded),
-            label: 'Sản phẩm',
-          ),
-          NavigationDestination(
+          const NavigationDrawerDestination(
             icon: Icon(Icons.receipt_outlined),
             selectedIcon: Icon(Icons.receipt_rounded),
-            label: 'Đơn hàng',
+            label: Text('Đơn hàng'),
           ),
-          NavigationDestination(
+          const NavigationDrawerDestination(
+            icon: Icon(Icons.coffee_outlined),
+            selectedIcon: Icon(Icons.coffee_rounded),
+            label: Text('Sản phẩm'),
+          ),
+          const NavigationDrawerDestination(
+            icon: Icon(Icons.category_outlined),
+            selectedIcon: Icon(Icons.category_rounded),
+            label: Text('Danh mục'),
+          ),
+          const NavigationDrawerDestination(
+            icon: Icon(Icons.confirmation_number_outlined),
+            selectedIcon: Icon(Icons.confirmation_number_rounded),
+            label: Text('Mã giảm giá'),
+          ),
+          const NavigationDrawerDestination(
+            icon: Icon(Icons.people_outline_rounded),
+            selectedIcon: Icon(Icons.people_rounded),
+            label: Text('Tài khoản'),
+          ),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.local_shipping_outlined),
+            title: const Text('Khu vực & phí giao hàng'),
+            onTap: () {
+              Navigator.of(context).pop();
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const AdminDeliveryAreasScreen(),
+                ),
+              );
+            },
+          ),
+          const NavigationDrawerDestination(
             icon: Icon(Icons.bar_chart_outlined),
             selectedIcon: Icon(Icons.bar_chart_rounded),
-            label: 'Thống kê',
+            label: Text('Thống kê'),
           ),
-          NavigationDestination(
+          const NavigationDrawerDestination(
             icon: Icon(Icons.file_download_outlined),
             selectedIcon: Icon(Icons.file_download_rounded),
-            label: 'Hoá đơn',
+            label: Text('Hoá đơn'),
           ),
         ],
       ),
+      body: IndexedStack(index: _index, children: pages),
     );
   }
 }
@@ -162,27 +229,43 @@ class AdminProductsPage extends StatefulWidget {
 
 class _AdminProductsPageState extends State<AdminProductsPage> {
   final _repository = const AdminRepository();
-  late Future<List<Product>> _future;
+  final _categoryRepository = const CategoryRepository();
+  late Future<_ProductPageData> _future;
 
   @override
   void initState() {
     super.initState();
-    _future = _repository.fetchProducts();
+    _future = _load();
   }
 
   void _refresh() {
     setState(() {
-      _future = _repository.fetchProducts();
+      _future = _load();
     });
   }
 
-  Future<void> _openEditor([Product? product]) async {
+  Future<_ProductPageData> _load() async {
+    final results = await Future.wait<Object>([
+      _repository.fetchProducts(),
+      _categoryRepository.fetchCategories(),
+    ]);
+    return _ProductPageData(
+      products: results[0] as List<Product>,
+      categories: results[1] as List<ProductCategory>,
+    );
+  }
+
+  Future<void> _openEditor(
+    List<ProductCategory> categories, [
+    Product? product,
+  ]) async {
     final saved = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => _ProductEditor(
         product: product,
+        categories: categories,
         onSave: _repository.saveProduct,
         onPickImage: _repository.pickAndStoreProductImage,
       ),
@@ -233,7 +316,7 @@ class _AdminProductsPageState extends State<AdminProductsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<Product>>(
+    return FutureBuilder<_ProductPageData>(
       future: _future,
       builder: (context, snapshot) {
         return ListView(
@@ -243,7 +326,12 @@ class _AdminProductsPageState extends State<AdminProductsPage> {
               title: 'Sản phẩm',
               action: IconButton.filled(
                 tooltip: 'Thêm sản phẩm',
-                onPressed: () => _openEditor(),
+                onPressed:
+                    snapshot.connectionState == ConnectionState.done &&
+                        snapshot.hasData &&
+                        snapshot.data!.activeCategories.isNotEmpty
+                    ? () => _openEditor(snapshot.data!.categories)
+                    : null,
                 icon: const Icon(Icons.add_rounded),
               ),
             ),
@@ -252,17 +340,17 @@ class _AdminProductsPageState extends State<AdminProductsPage> {
               const _LoadingBlock()
             else if (snapshot.hasError)
               _ErrorBlock(error: snapshot.error)
-            else if (snapshot.data!.isEmpty)
+            else if (snapshot.data!.products.isEmpty)
               const _EmptyBlock(
                 icon: Icons.coffee_rounded,
                 title: 'Chưa có sản phẩm',
                 body: 'Bấm nút thêm để tạo món đầu tiên cho menu.',
               )
             else
-              ...snapshot.data!.map(
+              ...snapshot.data!.products.map(
                 (product) => _ProductAdminTile(
                   product: product,
-                  onEdit: () => _openEditor(product),
+                  onEdit: () => _openEditor(snapshot.data!.categories, product),
                   onDelete: () => _deleteProduct(product),
                 ),
               ),
@@ -1069,14 +1157,26 @@ class _OrderTile extends StatelessWidget {
   }
 }
 
+class _ProductPageData {
+  const _ProductPageData({required this.products, required this.categories});
+
+  final List<Product> products;
+  final List<ProductCategory> categories;
+
+  List<ProductCategory> get activeCategories =>
+      categories.where((category) => category.isActive).toList();
+}
+
 class _ProductEditor extends StatefulWidget {
   const _ProductEditor({
     required this.product,
+    required this.categories,
     required this.onSave,
     required this.onPickImage,
   });
 
   final Product? product;
+  final List<ProductCategory> categories;
   final Future<void> Function(Product product) onSave;
   final Future<String?> Function(String idHint) onPickImage;
 
@@ -1090,12 +1190,19 @@ class _ProductEditorState extends State<_ProductEditor> {
   late final TextEditingController _nameController;
   late final TextEditingController _descriptionController;
   late final TextEditingController _priceController;
-  late final TextEditingController _categoryController;
   late final TextEditingController _labelController;
   late final TextEditingController _imageController;
+  String? _selectedCategoryId;
   Color _accentColor = AppColors.caramel;
   bool _isSaving = false;
   bool _isPickingImage = false;
+
+  ProductCategory? get _selectedCategory {
+    for (final category in widget.categories) {
+      if (category.id == _selectedCategoryId) return category;
+    }
+    return null;
+  }
 
   @override
   void initState() {
@@ -1109,9 +1216,12 @@ class _ProductEditorState extends State<_ProductEditor> {
     _priceController = TextEditingController(
       text: product?.price.toString() ?? '',
     );
-    _categoryController = TextEditingController(
-      text: product?.category ?? 'Cà phê',
-    );
+    _selectedCategoryId =
+        product?.categoryId ??
+        widget.categories
+            .where((category) => category.isActive)
+            .firstOrNull
+            ?.id;
     _labelController = TextEditingController(text: product?.imageLabel ?? '');
     _imageController = TextEditingController(text: product?.imageAsset ?? '');
     _accentColor = product?.accentColor ?? AppColors.caramel;
@@ -1123,7 +1233,6 @@ class _ProductEditorState extends State<_ProductEditor> {
     _nameController.dispose();
     _descriptionController.dispose();
     _priceController.dispose();
-    _categoryController.dispose();
     _labelController.dispose();
     _imageController.dispose();
     super.dispose();
@@ -1135,12 +1244,16 @@ class _ProductEditorState extends State<_ProductEditor> {
     final id = _idController.text.trim().isEmpty
         ? _slug(_nameController.text)
         : _idController.text.trim();
+    final category = widget.categories.firstWhere(
+      (value) => value.id == _selectedCategoryId,
+    );
     final product = Product(
       id: id,
       name: _nameController.text.trim(),
       description: _descriptionController.text.trim(),
       price: int.parse(_priceController.text.trim()),
-      category: _categoryController.text.trim(),
+      category: category.name,
+      categoryId: category.id,
       imageLabel: _labelController.text.trim(),
       accentColor: _accentColor,
       imageAsset: _imageController.text.trim().isEmpty
@@ -1214,7 +1327,6 @@ class _ProductEditorState extends State<_ProductEditor> {
                     _nameController,
                     _descriptionController,
                     _priceController,
-                    _categoryController,
                     _labelController,
                     _imageController,
                   ]),
@@ -1230,9 +1342,8 @@ class _ProductEditorState extends State<_ProductEditor> {
                           ? 'Mô tả sản phẩm'
                           : _descriptionController.text.trim(),
                       price: int.tryParse(_priceController.text.trim()) ?? 0,
-                      category: _categoryController.text.trim().isEmpty
-                          ? 'Danh mục'
-                          : _categoryController.text.trim(),
+                      category: _selectedCategory?.name ?? 'Danh mục',
+                      categoryId: _selectedCategoryId ?? 'preview-category',
                       imageLabel: _labelController.text.trim().isEmpty
                           ? 'Ảnh'
                           : _labelController.text.trim(),
@@ -1287,12 +1398,29 @@ class _ProductEditorState extends State<_ProductEditor> {
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: TextFormField(
-                        controller: _categoryController,
+                      child: DropdownButtonFormField<String>(
+                        initialValue: _selectedCategoryId,
+                        isExpanded: true,
                         decoration: const InputDecoration(
                           labelText: 'Danh mục',
                         ),
-                        validator: _required,
+                        items: widget.categories
+                            .where(
+                              (category) =>
+                                  category.isActive ||
+                                  category.id == widget.product?.categoryId,
+                            )
+                            .map(
+                              (category) => DropdownMenuItem(
+                                value: category.id,
+                                child: Text(category.name),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) =>
+                            setState(() => _selectedCategoryId = value),
+                        validator: (value) =>
+                            value == null ? 'Vui lòng chọn danh mục.' : null,
                       ),
                     ),
                   ],

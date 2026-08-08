@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../models/checkout_snapshot.dart';
+import '../models/discount_code.dart';
 import '../models/order_draft.dart';
 import '../providers/auth_provider.dart';
 import '../providers/cart_provider.dart';
 import '../services/order_repository.dart';
+import '../services/discount_repository.dart';
 import '../utils/app_colors.dart';
 import '../utils/currency_formatter.dart';
 import '../widgets/primary_button.dart';
@@ -20,7 +22,9 @@ class CheckoutScreen extends StatefulWidget {
 
 class _CheckoutScreenState extends State<CheckoutScreen> {
   final _orderRepository = const OrderRepository();
+  final _discountRepository = const DiscountRepository();
   final _noteController = TextEditingController();
+  final _discountController = TextEditingController();
 
   CheckoutSnapshot? _checkout;
   String? _loadError;
@@ -28,6 +32,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   String _payment = 'Tiền mặt khi nhận hàng';
   bool _isLoading = true;
   bool _isSubmitting = false;
+  bool _isApplyingDiscount = false;
+  AppliedDiscount? _appliedDiscount;
 
   final _paymentOptions = const [
     _PaymentOption(
@@ -59,6 +65,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   @override
   void dispose() {
     _noteController.dispose();
+    _discountController.dispose();
     super.dispose();
   }
 
@@ -102,6 +109,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         user: user,
         paymentMethod: _payment,
         items: cart.items,
+        discountCodeId: _appliedDiscount?.discount.id,
         note: _noteController.text,
       );
       cart.clear();
@@ -148,6 +156,46 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     }
   }
 
+  Future<void> _applyDiscount(int subtotal) async {
+    final code = _discountController.text.trim();
+    if (code.isEmpty || _isApplyingDiscount) return;
+    setState(() => _isApplyingDiscount = true);
+    try {
+      final applied = await _discountRepository.validateCode(
+        code: code,
+        subtotal: subtotal,
+      );
+      if (!mounted) return;
+      setState(() => _appliedDiscount = applied);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Đã áp dụng ${applied.discount.code}, giảm ${formatVnd(applied.amount)}.',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.toString()),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: AppColors.coffeeDark,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isApplyingDiscount = false);
+    }
+  }
+
+  void _removeDiscount() {
+    setState(() {
+      _appliedDiscount = null;
+      _discountController.clear();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final cart = CartScope.of(context);
@@ -156,13 +204,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         : OrderDraft.fromCart(
             items: cart.items,
             shippingFee: _checkout!.deliveryArea.shippingFee,
+            discountAmount: _appliedDiscount?.amount ?? 0,
           );
     final canPlace =
         !_isLoading &&
         _loadError == null &&
         _checkout?.deliveryArea.isActive == true &&
         draft != null &&
-        !_isSubmitting;
+        !_isSubmitting &&
+        !_isApplyingDiscount;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -243,6 +293,39 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 const _SectionTitle('Địa chỉ giao hàng'),
                 const SizedBox(height: 12),
                 _AddressCard(checkout: _checkout!),
+                const SizedBox(height: 22),
+                const _SectionTitle('Mã giảm giá'),
+                const SizedBox(height: 10),
+                if (_appliedDiscount == null)
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _discountController,
+                          textCapitalization: TextCapitalization.characters,
+                          decoration: const InputDecoration(
+                            hintText: 'Nhập mã giảm giá',
+                            prefixIcon: Icon(
+                              Icons.confirmation_number_outlined,
+                            ),
+                          ),
+                          onSubmitted: (_) => _applyDiscount(draft!.subtotal),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      FilledButton(
+                        onPressed: _isApplyingDiscount
+                            ? null
+                            : () => _applyDiscount(draft!.subtotal),
+                        child: Text(_isApplyingDiscount ? '...' : 'Áp dụng'),
+                      ),
+                    ],
+                  )
+                else
+                  _AppliedDiscountCard(
+                    applied: _appliedDiscount!,
+                    onRemove: _removeDiscount,
+                  ),
                 const SizedBox(height: 22),
                 const _SectionTitle('Phương thức thanh toán'),
                 const SizedBox(height: 12),
@@ -451,6 +534,10 @@ class _TotalCard extends StatelessWidget {
         children: [
           _MoneyRow('Tổng tiền sản phẩm', draft.subtotal),
           const SizedBox(height: 10),
+          if (draft.discountAmount > 0) ...[
+            _MoneyRow('Giảm giá', -draft.discountAmount, discount: true),
+            const SizedBox(height: 10),
+          ],
           _MoneyRow('Phí giao hàng', draft.shippingFee),
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 14),
@@ -464,11 +551,17 @@ class _TotalCard extends StatelessWidget {
 }
 
 class _MoneyRow extends StatelessWidget {
-  const _MoneyRow(this.label, this.value, {this.highlight = false});
+  const _MoneyRow(
+    this.label,
+    this.value, {
+    this.highlight = false,
+    this.discount = false,
+  });
 
   final String label;
   final int value;
   final bool highlight;
+  final bool discount;
 
   @override
   Widget build(BuildContext context) => Row(
@@ -483,14 +576,51 @@ class _MoneyRow extends StatelessWidget {
         ),
       ),
       Text(
-        formatVnd(value),
+        '${value < 0 ? '-' : ''}${formatVnd(value.abs())}',
         style: TextStyle(
-          color: highlight ? AppColors.caramel : AppColors.textDark,
+          color: highlight
+              ? AppColors.caramel
+              : discount
+              ? AppColors.success
+              : AppColors.textDark,
           fontSize: highlight ? 21 : 15,
           fontWeight: FontWeight.w900,
         ),
       ),
     ],
+  );
+}
+
+class _AppliedDiscountCard extends StatelessWidget {
+  const _AppliedDiscountCard({required this.applied, required this.onRemove});
+
+  final AppliedDiscount applied;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: AppColors.success.withValues(alpha: 0.08),
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: AppColors.success.withValues(alpha: 0.25)),
+    ),
+    child: Row(
+      children: [
+        const Icon(Icons.check_circle_rounded, color: AppColors.success),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            '${applied.discount.code} · giảm ${formatVnd(applied.amount)}',
+            style: const TextStyle(
+              color: AppColors.textDark,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
+        TextButton(onPressed: onRemove, child: const Text('Bỏ mã')),
+      ],
+    ),
   );
 }
 

@@ -177,6 +177,16 @@ class _OrderHeader extends StatelessWidget {
           const SizedBox(height: 12),
           _MoneyLine('Tiền sản phẩm', order.subtotal),
           const SizedBox(height: 6),
+          if (order.discountAmount > 0) ...[
+            _MoneyLine(
+              order.discountCode?.isNotEmpty == true
+                  ? 'Giảm giá (${order.discountCode})'
+                  : 'Giảm giá',
+              -order.discountAmount,
+              discount: true,
+            ),
+            const SizedBox(height: 6),
+          ],
           _MoneyLine('Phí giao hàng', order.deliveryFee),
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 10),
@@ -239,7 +249,7 @@ class _OrderItemsCard extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        '${item.size} · đường ${item.sugar} · đá ${item.ice}',
+                        '${item.size} · đường ${item.sugar} · đá ${item.ice} · ${formatVnd(item.unitPrice)}',
                         style: const TextStyle(
                           color: AppColors.textMuted,
                           fontSize: 12,
@@ -315,11 +325,17 @@ class _InfoLine extends StatelessWidget {
 }
 
 class _MoneyLine extends StatelessWidget {
-  const _MoneyLine(this.label, this.value, {this.highlight = false});
+  const _MoneyLine(
+    this.label,
+    this.value, {
+    this.highlight = false,
+    this.discount = false,
+  });
 
   final String label;
   final int value;
   final bool highlight;
+  final bool discount;
 
   @override
   Widget build(BuildContext context) => Row(
@@ -333,9 +349,13 @@ class _MoneyLine extends StatelessWidget {
         ),
       ),
       Text(
-        formatVnd(value),
+        '${value < 0 ? '-' : ''}${formatVnd(value.abs())}',
         style: TextStyle(
-          color: highlight ? AppColors.caramel : AppColors.textDark,
+          color: highlight
+              ? AppColors.caramel
+              : discount
+              ? AppColors.success
+              : AppColors.textDark,
           fontWeight: FontWeight.w900,
           fontSize: highlight ? 18 : 14,
         ),

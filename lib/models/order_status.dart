@@ -10,6 +10,14 @@ enum OrderStatus {
 extension OrderStatusX on OrderStatus {
   String get databaseValue => name;
 
+  bool get isProcessing => switch (this) {
+    OrderStatus.pending ||
+    OrderStatus.confirmed ||
+    OrderStatus.preparing ||
+    OrderStatus.delivering => true,
+    OrderStatus.completed || OrderStatus.cancelled => false,
+  };
+
   String get label {
     switch (this) {
       case OrderStatus.pending:

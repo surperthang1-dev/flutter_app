@@ -43,12 +43,14 @@ class OrderDraft {
     required this.items,
     required this.subtotal,
     required this.shippingFee,
+    required this.discountAmount,
     required this.total,
   });
 
   factory OrderDraft.fromCart({
     required List<CartItem> items,
     required int shippingFee,
+    int discountAmount = 0,
   }) {
     if (items.isEmpty) {
       throw const OrderDraftException('Giỏ hàng đang trống.');
@@ -66,17 +68,22 @@ class OrderDraft {
       0,
       (sum, item) => sum + item.lineTotal,
     );
+    if (discountAmount < 0 || discountAmount > subtotal) {
+      throw const OrderDraftException('Giảm giá không hợp lệ.');
+    }
     return OrderDraft._(
       items: List.unmodifiable(snapshots),
       subtotal: subtotal,
       shippingFee: shippingFee,
-      total: subtotal + shippingFee,
+      discountAmount: discountAmount,
+      total: subtotal - discountAmount + shippingFee,
     );
   }
 
   final List<OrderLineSnapshot> items;
   final int subtotal;
   final int shippingFee;
+  final int discountAmount;
   final int total;
 
   OrderStatus get initialStatus => OrderStatus.pending;

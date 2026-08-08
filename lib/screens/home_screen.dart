@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../data/mock_products.dart';
 import '../models/product.dart';
+import '../models/product_category.dart';
 import '../providers/auth_provider.dart';
 import '../providers/cart_provider.dart';
 import '../services/postgres_product_repository.dart';
+import '../services/category_repository.dart';
 import '../utils/app_colors.dart';
 import '../widgets/product_card.dart';
 import 'product_detail_screen.dart';
@@ -18,11 +20,13 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final _productRepository = const PostgresProductRepository();
+  final _categoryRepository = const CategoryRepository();
   final _searchController = TextEditingController();
 
   String _selectedCategory = 'Tất cả';
   String _query = '';
   List<Product> _allProducts = mockProducts;
+  List<ProductCategory> _allCategories = const [];
   bool _isLoadingProducts = true;
   String? _productLoadError;
 
@@ -43,7 +47,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   List<String> get _categories {
     final values =
-        _allProducts.map((product) => product.category).toSet().toList()
+        _allCategories.isNotEmpty
+              ? _allCategories.map((category) => category.name).toList()
+              : _allProducts.map((product) => product.category).toSet().toList()
           ..sort();
     return ['Tất cả', ...values];
   }
@@ -64,10 +70,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadProductsFromDatabase() async {
     try {
-      final products = await _productRepository.fetchProducts();
+      final result = await Future.wait<Object>([
+        _productRepository.fetchProducts(),
+        _categoryRepository.fetchCategories(includeInactive: false),
+      ]);
+      final products = result[0] as List<Product>;
+      final categories = result[1] as List<ProductCategory>;
       if (!mounted) return;
       setState(() {
-        _allProducts = products.isEmpty ? mockProducts : products;
+        _allProducts = products;
+        _allCategories = categories;
         _isLoadingProducts = false;
         _productLoadError = null;
         if (!_categories.contains(_selectedCategory)) {
@@ -78,6 +90,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (!mounted) return;
       setState(() {
         _allProducts = mockProducts;
+        _allCategories = const [];
         _isLoadingProducts = false;
         _productLoadError = error.toString();
       });

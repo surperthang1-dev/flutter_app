@@ -19,11 +19,11 @@ class _MainShellState extends State<MainShell> {
   @override
   Widget build(BuildContext context) {
     final cart = CartScope.of(context);
-    final screens = const [
-      HomeScreen(),
-      CartScreen(),
-      MyOrdersScreen(),
-      ProfileScreen(),
+    final screens = [
+      const HomeScreen(),
+      const CartScreen(),
+      MyOrdersScreen(isActive: _index == 2),
+      const ProfileScreen(),
     ];
 
     return Scaffold(

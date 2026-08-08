@@ -10,11 +10,15 @@ class AdminOrder {
     required this.status,
     required this.subtotal,
     required this.deliveryFee,
+    required this.discountAmount,
     required this.total,
     required this.createdAt,
     required this.items,
     this.deliveryAreaId,
     this.deliveryAreaName,
+    this.discountCode,
+    this.discountType,
+    this.discountValue,
     this.cancelReason,
     this.confirmedAt,
     this.preparingAt,
@@ -31,11 +35,15 @@ class AdminOrder {
   final String status;
   final int subtotal;
   final int deliveryFee;
+  final int discountAmount;
   final int total;
   final DateTime createdAt;
   final List<AdminOrderItem> items;
   final String? deliveryAreaId;
   final String? deliveryAreaName;
+  final String? discountCode;
+  final String? discountType;
+  final int? discountValue;
   final String? cancelReason;
   final DateTime? confirmedAt;
   final DateTime? preparingAt;

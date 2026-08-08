@@ -74,17 +74,19 @@ class AdminRepository {
     try {
       final rows = await connection.execute('''
         SELECT
-          id,
-          name,
-          description,
-          price,
-          category,
-          image_label,
-          accent_color,
-          image_asset
+          products.id,
+          products.name,
+          products.description,
+          products.price,
+          categories.name AS category,
+          products.category_id,
+          products.image_label,
+          products.accent_color,
+          products.image_asset
         FROM products
-        WHERE is_active = TRUE
-        ORDER BY sort_order ASC, name ASC
+        INNER JOIN categories ON categories.id = products.category_id
+        WHERE products.is_active = TRUE
+        ORDER BY products.sort_order ASC, products.name ASC
       ''');
       return rows
           .map((row) => _productFromColumnMap(row.toColumnMap()))
@@ -105,6 +107,7 @@ class AdminRepository {
             description,
             price,
             category,
+            category_id,
             image_label,
             accent_color,
             image_asset,
@@ -117,6 +120,7 @@ class AdminRepository {
             @description,
             @price,
             @category,
+            @categoryId,
             @imageLabel,
             @accentColor,
             NULLIF(@imageAsset, ''),
@@ -128,6 +132,7 @@ class AdminRepository {
             description = EXCLUDED.description,
             price = EXCLUDED.price,
             category = EXCLUDED.category,
+            category_id = EXCLUDED.category_id,
             image_label = EXCLUDED.image_label,
             accent_color = EXCLUDED.accent_color,
             image_asset = EXCLUDED.image_asset,
@@ -140,6 +145,7 @@ class AdminRepository {
           'description': product.description,
           'price': product.price,
           'category': product.category,
+          'categoryId': product.categoryId,
           'imageLabel': product.imageLabel,
           'accentColor': product.accentColor.toARGB32(),
           'imageAsset': product.imageAsset ?? '',
@@ -271,6 +277,7 @@ class AdminRepository {
       description: data['description'] as String,
       price: data['price'] as int,
       category: data['category'] as String,
+      categoryId: data['category_id'] as String,
       imageLabel: data['image_label'] as String,
       accentColor: Color(data['accent_color'] as int),
       imageAsset: data['image_asset'] as String?,

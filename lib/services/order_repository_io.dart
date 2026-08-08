@@ -28,6 +28,7 @@ class OrderRepository {
     required AuthUser user,
     required String paymentMethod,
     required List<CartItem> items,
+    String? discountCodeId,
     String? note,
   }) async {
     final connection = await _open();
@@ -61,6 +62,7 @@ class OrderRepository {
               delivery_fee,
               total,
               status,
+              discount_code_id,
               note
             )
             VALUES (
@@ -76,6 +78,7 @@ class OrderRepository {
               @deliveryFee,
               @total,
               @status,
+              NULLIF(@discountCodeId, ''),
               NULLIF(@note, '')
             )
           '''),
@@ -92,6 +95,7 @@ class OrderRepository {
             'deliveryFee': draft.shippingFee,
             'total': draft.total,
             'status': draft.initialStatus.databaseValue,
+            'discountCodeId': discountCodeId?.trim() ?? '',
             'note': note?.trim() ?? '',
           },
         );
@@ -367,6 +371,10 @@ class OrderRepository {
           orders.status,
           orders.subtotal,
           orders.delivery_fee,
+          orders.discount_code,
+          orders.discount_type,
+          orders.discount_value,
+          orders.discount_amount,
           orders.total,
           orders.note,
           orders.cancel_reason,
@@ -440,6 +448,10 @@ class OrderRepository {
         status: data['status'] as String,
         subtotal: (data['subtotal'] as num).toInt(),
         deliveryFee: (data['delivery_fee'] as num).toInt(),
+        discountCode: data['discount_code'] as String?,
+        discountType: data['discount_type'] as String?,
+        discountValue: (data['discount_value'] as num?)?.toInt(),
+        discountAmount: (data['discount_amount'] as num?)?.toInt() ?? 0,
         total: (data['total'] as num).toInt(),
         createdAt: data['created_at'] as DateTime,
         cancelReason: data['cancel_reason'] as String?,
