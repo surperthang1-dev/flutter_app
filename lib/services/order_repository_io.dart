@@ -325,9 +325,12 @@ class OrderRepository {
     final data = rows.first.toColumnMap();
     final areaId = data['delivery_area_id'] as String?;
     final address = data['address_detail'] as String;
-    if (areaId == null || address.trim().isEmpty) {
+    final addressNote = data['address_note'] as String?;
+    if (areaId == null ||
+        address.trim().isEmpty ||
+        (addressNote?.trim().isEmpty ?? true)) {
       throw const OrderException(
-        'Tài khoản chưa có địa chỉ và khu vực giao hàng hợp lệ.',
+        'Tài khoản chưa có địa chỉ, ghi chú và khu vực giao hàng hợp lệ.',
       );
     }
 
@@ -335,7 +338,7 @@ class OrderRepository {
       fullName: data['full_name'] as String,
       phone: data['phone'] as String,
       addressDetail: address,
-      addressNote: data['address_note'] as String?,
+      addressNote: addressNote,
       deliveryArea: DeliveryArea(
         id: areaId,
         name: data['delivery_area_name'] as String,

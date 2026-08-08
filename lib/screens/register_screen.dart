@@ -260,7 +260,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               (area) => DropdownMenuItem(
                                 value: area.id,
                                 child: Text(
-                                  '${area.name} · ${_formatFee(area.shippingFee)}',
+                                  area.name,
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
@@ -290,10 +290,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         maxLines: 2,
                         textInputAction: TextInputAction.next,
                         decoration: const InputDecoration(
-                          labelText: 'Ghi chú địa chỉ (không bắt buộc)',
-                          hintText: 'Ví dụ: Gọi trước khi giao',
+                          labelText: 'Ghi chú địa chỉ',
+                          hintText: 'Ví dụ: Tòa nhà, tầng, gọi trước khi giao',
                           prefixIcon: Icon(Icons.edit_note_rounded),
                         ),
+                        validator: RegistrationValidator.addressNote,
                       ),
                       const SizedBox(height: 16),
                       TextFormField(
@@ -356,14 +357,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
         ),
       ),
     );
-  }
-
-  String _formatFee(int fee) {
-    final value = fee.toString().replaceAllMapped(
-      RegExp(r'(?<!^)(?=(\d{3})+$)'),
-      (_) => '.',
-    );
-    return fee == 0 ? 'Miễn phí' : '$valueđ';
   }
 }
 

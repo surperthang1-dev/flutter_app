@@ -46,6 +46,13 @@ class RegistrationValidator {
     return null;
   }
 
+  static String? addressNote(String? value) {
+    if ((value?.trim() ?? '').isEmpty) {
+      return 'Vui lòng nhập ghi chú để giao hàng chính xác.';
+    }
+    return null;
+  }
+
   static String? deliveryAreaId(String? value) {
     if (value == null || value.trim().isEmpty) {
       return 'Vui lòng chọn khu vực giao hàng.';

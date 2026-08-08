@@ -320,3 +320,353 @@ CREATE INDEX IF NOT EXISTS orders_status_created_at_idx
   ON orders (status, created_at DESC);
 CREATE INDEX IF NOT EXISTS order_status_history_order_id_idx
   ON order_status_history (order_id, created_at ASC);
+
+-- Data-integrity triggers. Flutter validates these rules for a friendly UX;
+-- the database repeats the critical checks so direct SQL cannot corrupt orders.
+UPDATE app_users
+SET address_note = 'Chưa cập nhật'
+WHERE NULLIF(BTRIM(COALESCE(address_note, '')), '') IS NULL;
+
+ALTER TABLE app_users
+  ALTER COLUMN address_note SET NOT NULL;
+
+CREATE OR REPLACE FUNCTION coffee_touch_updated_at()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  NEW.updated_at := NOW();
+  RETURN NEW;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION coffee_normalize_delivery_area()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  NEW.name := BTRIM(NEW.name);
+  IF COALESCE(NEW.name, '') = '' THEN
+    RAISE EXCEPTION 'Tên khu vực giao hàng không được để trống.';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION coffee_normalize_product()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  NEW.name := BTRIM(NEW.name);
+  NEW.description := BTRIM(NEW.description);
+  NEW.category := BTRIM(NEW.category);
+  NEW.image_label := BTRIM(NEW.image_label);
+
+  IF COALESCE(NEW.name, '') = ''
+    OR COALESCE(NEW.description, '') = ''
+    OR COALESCE(NEW.category, '') = ''
+    OR COALESCE(NEW.image_label, '') = '' THEN
+    RAISE EXCEPTION 'Thông tin sản phẩm không được để trống.';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION coffee_validate_customer_profile()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  NEW.full_name := BTRIM(NEW.full_name);
+  NEW.phone := BTRIM(NEW.phone);
+  NEW.email := NULLIF(LOWER(BTRIM(COALESCE(NEW.email, ''))), '');
+  NEW.address_detail := NULLIF(BTRIM(COALESCE(NEW.address_detail, '')), '');
+  NEW.address_note := NULLIF(BTRIM(COALESCE(NEW.address_note, '')), '');
+
+  IF NEW.address_detail IS NOT NULL THEN
+    NEW.address := NEW.address_detail;
+  END IF;
+
+  IF NEW.role = 0 THEN
+    IF NEW.address_detail IS NULL THEN
+      RAISE EXCEPTION 'Khách hàng phải có số nhà và tên đường.';
+    END IF;
+    IF NEW.address_note IS NULL THEN
+      RAISE EXCEPTION 'Khách hàng phải có ghi chú địa chỉ.';
+    END IF;
+    IF NEW.delivery_area_id IS NULL THEN
+      RAISE EXCEPTION 'Khách hàng phải chọn khu vực giao hàng.';
+    END IF;
+    IF TG_OP = 'INSERT'
+      OR NEW.delivery_area_id IS DISTINCT FROM OLD.delivery_area_id THEN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM delivery_areas
+        WHERE id = NEW.delivery_area_id
+          AND is_active = TRUE
+      ) THEN
+        RAISE EXCEPTION 'Khu vực giao hàng không còn hoạt động.';
+      END IF;
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION coffee_guard_order()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  area_name TEXT;
+  area_fee INTEGER;
+BEGIN
+  NEW.customer_name := BTRIM(NEW.customer_name);
+  NEW.customer_phone := BTRIM(NEW.customer_phone);
+  NEW.delivery_address := BTRIM(NEW.delivery_address);
+  NEW.payment_method := BTRIM(NEW.payment_method);
+  NEW.note := NULLIF(BTRIM(COALESCE(NEW.note, '')), '');
+  NEW.cancel_reason := NULLIF(BTRIM(COALESCE(NEW.cancel_reason, '')), '');
+
+  IF COALESCE(NEW.customer_name, '') = ''
+    OR COALESCE(NEW.customer_phone, '') = ''
+    OR COALESCE(NEW.delivery_address, '') = ''
+    OR COALESCE(NEW.payment_method, '') = '' THEN
+    RAISE EXCEPTION 'Thông tin đơn hàng không được để trống.';
+  END IF;
+
+  IF TG_OP = 'INSERT' THEN
+    IF NEW.status <> 'pending' THEN
+      RAISE EXCEPTION 'Đơn hàng mới phải ở trạng thái chờ xác nhận.';
+    END IF;
+    SELECT name, shipping_fee
+    INTO area_name, area_fee
+    FROM delivery_areas
+    WHERE id = NEW.delivery_area_id
+      AND is_active = TRUE;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'Khu vực giao hàng không còn hoạt động.';
+    END IF;
+    NEW.delivery_area_name := area_name;
+    NEW.delivery_fee := area_fee;
+    NEW.total := NEW.subtotal + NEW.delivery_fee;
+    RETURN NEW;
+  END IF;
+
+  IF NEW.user_id IS DISTINCT FROM OLD.user_id
+    OR NEW.delivery_area_id IS DISTINCT FROM OLD.delivery_area_id
+    OR NEW.delivery_area_name IS DISTINCT FROM OLD.delivery_area_name
+    OR NEW.customer_name IS DISTINCT FROM OLD.customer_name
+    OR NEW.customer_phone IS DISTINCT FROM OLD.customer_phone
+    OR NEW.delivery_address IS DISTINCT FROM OLD.delivery_address
+    OR NEW.payment_method IS DISTINCT FROM OLD.payment_method
+    OR NEW.subtotal IS DISTINCT FROM OLD.subtotal
+    OR NEW.delivery_fee IS DISTINCT FROM OLD.delivery_fee
+    OR NEW.total IS DISTINCT FROM OLD.total THEN
+    RAISE EXCEPTION 'Không thể sửa dữ liệu chụp nhanh của đơn hàng.';
+  END IF;
+
+  IF NEW.status IS DISTINCT FROM OLD.status THEN
+    IF NOT (
+      (OLD.status = 'pending' AND NEW.status IN ('confirmed', 'cancelled'))
+      OR (OLD.status = 'confirmed' AND NEW.status IN ('preparing', 'cancelled'))
+      OR (OLD.status = 'preparing' AND NEW.status IN ('delivering', 'cancelled'))
+      OR (OLD.status = 'delivering' AND NEW.status = 'completed')
+    ) THEN
+      RAISE EXCEPTION 'Chuyển trạng thái đơn hàng không hợp lệ: % -> %.', OLD.status, NEW.status;
+    END IF;
+
+    IF NEW.status = 'cancelled' AND NEW.cancel_reason IS NULL THEN
+      RAISE EXCEPTION 'Hủy đơn hàng phải có lý do.';
+    END IF;
+
+    IF NEW.status = 'confirmed' AND NEW.confirmed_at IS NULL THEN
+      NEW.confirmed_at := NOW();
+    ELSIF NEW.status = 'preparing' AND NEW.preparing_at IS NULL THEN
+      NEW.preparing_at := NOW();
+    ELSIF NEW.status = 'delivering' AND NEW.delivering_at IS NULL THEN
+      NEW.delivering_at := NOW();
+    ELSIF NEW.status = 'completed' AND NEW.completed_at IS NULL THEN
+      NEW.completed_at := NOW();
+    ELSIF NEW.status = 'cancelled' AND NEW.cancelled_at IS NULL THEN
+      NEW.cancelled_at := NOW();
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION coffee_guard_order_item()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  NEW.product_name := BTRIM(NEW.product_name);
+  NEW.size := BTRIM(NEW.size);
+  NEW.sugar := BTRIM(NEW.sugar);
+  NEW.ice := BTRIM(NEW.ice);
+  NEW.note := NULLIF(BTRIM(COALESCE(NEW.note, '')), '');
+
+  IF COALESCE(NEW.product_name, '') = ''
+    OR COALESCE(NEW.size, '') = ''
+    OR COALESCE(NEW.sugar, '') = ''
+    OR COALESCE(NEW.ice, '') = '' THEN
+    RAISE EXCEPTION 'Thông tin món trong đơn hàng không được để trống.';
+  END IF;
+
+  NEW.line_total := NEW.unit_price * NEW.quantity;
+  RETURN NEW;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION coffee_validate_order_totals()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  target_order_id TEXT;
+  stored_subtotal INTEGER;
+  stored_delivery_fee INTEGER;
+  stored_total INTEGER;
+  item_count BIGINT;
+  item_subtotal BIGINT;
+BEGIN
+  IF TG_TABLE_NAME = 'orders' THEN
+    target_order_id := CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END;
+  ELSE
+    target_order_id := CASE WHEN TG_OP = 'DELETE' THEN OLD.order_id ELSE NEW.order_id END;
+  END IF;
+
+  SELECT
+    orders.subtotal,
+    orders.delivery_fee,
+    orders.total,
+    COUNT(order_items.id),
+    COALESCE(SUM(order_items.line_total), 0)
+  INTO
+    stored_subtotal,
+    stored_delivery_fee,
+    stored_total,
+    item_count,
+    item_subtotal
+  FROM orders
+  LEFT JOIN order_items ON order_items.order_id = orders.id
+  WHERE orders.id = target_order_id
+  GROUP BY orders.id, orders.subtotal, orders.delivery_fee, orders.total;
+
+  IF NOT FOUND THEN
+    RETURN NULL;
+  END IF;
+
+  IF item_count = 0 THEN
+    RAISE EXCEPTION 'Đơn hàng phải có ít nhất một món.';
+  END IF;
+  IF item_subtotal <> stored_subtotal THEN
+    RAISE EXCEPTION 'Tạm tính đơn hàng không khớp với các món đã đặt.';
+  END IF;
+  IF stored_total <> stored_subtotal + stored_delivery_fee THEN
+    RAISE EXCEPTION 'Tổng thanh toán đơn hàng không hợp lệ.';
+  END IF;
+  RETURN NULL;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION coffee_guard_order_history()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  current_status TEXT;
+  latest_status TEXT;
+BEGIN
+  IF NEW.to_status NOT IN (
+    'pending', 'confirmed', 'preparing', 'delivering', 'completed', 'cancelled'
+  ) THEN
+    RAISE EXCEPTION 'Trạng thái lịch sử đơn hàng không hợp lệ.';
+  END IF;
+
+  SELECT status INTO current_status FROM orders WHERE id = NEW.order_id;
+  IF current_status IS DISTINCT FROM NEW.to_status THEN
+    RAISE EXCEPTION 'Lịch sử phải khớp trạng thái hiện tại của đơn hàng.';
+  END IF;
+
+  SELECT to_status
+  INTO latest_status
+  FROM order_status_history
+  WHERE order_id = NEW.order_id
+  ORDER BY id DESC
+  LIMIT 1;
+
+  IF NEW.from_status IS NULL THEN
+    IF latest_status IS NOT NULL OR NEW.to_status <> 'pending' THEN
+      RAISE EXCEPTION 'Bản ghi lịch sử đầu tiên phải là trạng thái chờ xác nhận.';
+    END IF;
+  ELSIF latest_status IS DISTINCT FROM NEW.from_status THEN
+    RAISE EXCEPTION 'Lịch sử trạng thái đơn hàng không liên tục.';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS coffee_10_normalize_delivery_areas ON delivery_areas;
+CREATE TRIGGER coffee_10_normalize_delivery_areas
+BEFORE INSERT OR UPDATE ON delivery_areas
+FOR EACH ROW EXECUTE FUNCTION coffee_normalize_delivery_area();
+
+DROP TRIGGER IF EXISTS coffee_10_normalize_products ON products;
+CREATE TRIGGER coffee_10_normalize_products
+BEFORE INSERT OR UPDATE ON products
+FOR EACH ROW EXECUTE FUNCTION coffee_normalize_product();
+
+DROP TRIGGER IF EXISTS coffee_10_validate_customer_profiles ON app_users;
+CREATE TRIGGER coffee_10_validate_customer_profiles
+BEFORE INSERT OR UPDATE ON app_users
+FOR EACH ROW EXECUTE FUNCTION coffee_validate_customer_profile();
+
+DROP TRIGGER IF EXISTS coffee_10_guard_orders ON orders;
+CREATE TRIGGER coffee_10_guard_orders
+BEFORE INSERT OR UPDATE ON orders
+FOR EACH ROW EXECUTE FUNCTION coffee_guard_order();
+
+DROP TRIGGER IF EXISTS coffee_10_guard_order_items ON order_items;
+CREATE TRIGGER coffee_10_guard_order_items
+BEFORE INSERT OR UPDATE ON order_items
+FOR EACH ROW EXECUTE FUNCTION coffee_guard_order_item();
+
+DROP TRIGGER IF EXISTS coffee_20_guard_order_history ON order_status_history;
+CREATE TRIGGER coffee_20_guard_order_history
+BEFORE INSERT ON order_status_history
+FOR EACH ROW EXECUTE FUNCTION coffee_guard_order_history();
+
+DROP TRIGGER IF EXISTS coffee_90_touch_delivery_areas ON delivery_areas;
+CREATE TRIGGER coffee_90_touch_delivery_areas
+BEFORE UPDATE ON delivery_areas
+FOR EACH ROW EXECUTE FUNCTION coffee_touch_updated_at();
+
+DROP TRIGGER IF EXISTS coffee_90_touch_products ON products;
+CREATE TRIGGER coffee_90_touch_products
+BEFORE UPDATE ON products
+FOR EACH ROW EXECUTE FUNCTION coffee_touch_updated_at();
+
+DROP TRIGGER IF EXISTS coffee_90_touch_users ON app_users;
+CREATE TRIGGER coffee_90_touch_users
+BEFORE UPDATE ON app_users
+FOR EACH ROW EXECUTE FUNCTION coffee_touch_updated_at();
+
+DROP TRIGGER IF EXISTS coffee_90_touch_orders ON orders;
+CREATE TRIGGER coffee_90_touch_orders
+BEFORE UPDATE ON orders
+FOR EACH ROW EXECUTE FUNCTION coffee_touch_updated_at();
+
+DROP TRIGGER IF EXISTS coffee_40_validate_order_totals_from_orders ON orders;
+CREATE CONSTRAINT TRIGGER coffee_40_validate_order_totals_from_orders
+AFTER INSERT OR UPDATE OR DELETE ON orders
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW EXECUTE FUNCTION coffee_validate_order_totals();
+
+DROP TRIGGER IF EXISTS coffee_40_validate_order_totals_from_items ON order_items;
+CREATE CONSTRAINT TRIGGER coffee_40_validate_order_totals_from_items
+AFTER INSERT OR UPDATE OR DELETE ON order_items
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW EXECUTE FUNCTION coffee_validate_order_totals();

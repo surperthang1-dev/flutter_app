@@ -19,6 +19,11 @@ void main() {
         'Vui lòng chọn khu vực giao hàng.',
       );
       expect(RegistrationValidator.deliveryAreaId('quan-1'), isNull);
+      expect(
+        RegistrationValidator.addressNote(''),
+        'Vui lòng nhập ghi chú để giao hàng chính xác.',
+      );
+      expect(RegistrationValidator.addressNote('Gọi trước khi giao'), isNull);
     });
 
     test('calculates subtotal, fee, total, and immutable item snapshots', () {
@@ -126,6 +131,7 @@ void main() {
             email: identity.email,
             password: 'secret123',
             addressDetail: '12 Đường Test, Quận 1',
+            addressNote: 'Gọi trước khi giao',
             deliveryAreaId: area.id,
           ),
           throwsA(isA<AuthException>()),
@@ -203,6 +209,7 @@ void main() {
         email: identity.email,
         password: 'secret123',
         addressDetail: '18 Đường Test, Quận 3',
+        addressNote: 'Gọi trước khi giao',
         deliveryAreaId: area.id,
       );
       await areaRepository.updateArea(
