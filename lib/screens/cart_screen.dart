@@ -5,6 +5,7 @@ import '../providers/cart_provider.dart';
 import '../utils/app_colors.dart';
 import '../utils/currency_formatter.dart';
 import '../widgets/primary_button.dart';
+import '../widgets/product_visual.dart';
 import '../widgets/quantity_stepper.dart';
 import 'checkout_screen.dart';
 
@@ -178,25 +179,18 @@ class _CartItemTile extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Vertical split: image/visual on left in themed square
-            Container(
+            // Use the same product image source as the Menu screen.  The
+            // fallback icon is retained only for products with no image yet.
+            SizedBox(
               width: 80,
               height: 80,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    item.product.accentColor.withValues(alpha: 0.16),
-                    item.product.accentColor.withValues(alpha: 0.04),
-                  ],
-                ),
+              child: ClipRRect(
                 borderRadius: BorderRadius.circular(20),
-              ),
-              child: Icon(
-                item.product.category == 'Bánh ngọt'
-                    ? Icons.cake_rounded
-                    : Icons.local_cafe_rounded,
-                color: item.product.accentColor,
-                size: 34,
+                child: ProductVisual(
+                  product: item.product,
+                  height: 80,
+                  iconSize: 30,
+                ),
               ),
             ),
             const SizedBox(width: 16),
