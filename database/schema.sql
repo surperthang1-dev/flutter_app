@@ -205,3 +205,118 @@ CREATE TABLE IF NOT EXISTS order_items (
 CREATE INDEX IF NOT EXISTS orders_user_id_idx ON orders (user_id);
 CREATE INDEX IF NOT EXISTS orders_created_at_idx ON orders (created_at DESC);
 CREATE INDEX IF NOT EXISTS order_items_order_id_idx ON order_items (order_id);
+
+-- Delivery areas are managed data. IDs are stable and are never derived from
+-- the display name, so existing orders remain valid when an admin renames an
+-- area or changes its fee.
+CREATE TABLE IF NOT EXISTS delivery_areas (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  shipping_fee INTEGER NOT NULL CHECK (shipping_fee >= 0),
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+INSERT INTO delivery_areas (id, name, shipping_fee, is_active) VALUES
+  ('quan-1', 'Quận 1', 15000, TRUE),
+  ('quan-3', 'Quận 3', 15000, TRUE),
+  ('binh-thanh', 'Bình Thạnh', 18000, TRUE),
+  ('phu-nhuan', 'Phú Nhuận', 18000, TRUE),
+  ('go-vap', 'Gò Vấp', 22000, TRUE),
+  ('tan-binh', 'Tân Bình', 22000, TRUE),
+  ('tan-phu', 'Tân Phú', 25000, TRUE),
+  ('thu-duc', 'Thành phố Thủ Đức', 30000, TRUE)
+ON CONFLICT (id) DO NOTHING;
+
+ALTER TABLE app_users
+  ADD COLUMN IF NOT EXISTS address_detail TEXT,
+  ADD COLUMN IF NOT EXISTS address_note TEXT,
+  ADD COLUMN IF NOT EXISTS delivery_area_id TEXT;
+
+-- Keep accounts created by the previous version usable without replacing the
+-- existing address column.
+UPDATE app_users
+SET address_detail = address
+WHERE address_detail IS NULL
+  AND address IS NOT NULL;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'app_users_delivery_area_id_fkey'
+  ) THEN
+    ALTER TABLE app_users
+      ADD CONSTRAINT app_users_delivery_area_id_fkey
+      FOREIGN KEY (delivery_area_id) REFERENCES delivery_areas(id)
+      ON DELETE RESTRICT;
+  END IF;
+END $$;
+
+ALTER TABLE orders
+  ADD COLUMN IF NOT EXISTS delivery_area_id TEXT,
+  ADD COLUMN IF NOT EXISTS delivery_area_name TEXT,
+  ADD COLUMN IF NOT EXISTS cancel_reason TEXT,
+  ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS preparing_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS delivering_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'orders_delivery_area_id_fkey'
+  ) THEN
+    ALTER TABLE orders
+      ADD CONSTRAINT orders_delivery_area_id_fkey
+      FOREIGN KEY (delivery_area_id) REFERENCES delivery_areas(id)
+      ON DELETE RESTRICT;
+  END IF;
+END $$;
+
+ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_status_check;
+ALTER TABLE orders
+  ADD CONSTRAINT orders_status_check
+  CHECK (status IN (
+    'pending',
+    'confirmed',
+    'preparing',
+    'delivering',
+    'completed',
+    'cancelled'
+  )) NOT VALID;
+
+CREATE TABLE IF NOT EXISTS order_status_history (
+  id BIGSERIAL PRIMARY KEY,
+  order_id TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  from_status TEXT,
+  to_status TEXT NOT NULL,
+  note TEXT,
+  changed_by_user_id UUID REFERENCES app_users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+INSERT INTO order_status_history (order_id, from_status, to_status, created_at)
+SELECT id, NULL, status, created_at
+FROM orders
+WHERE NOT EXISTS (
+  SELECT 1
+  FROM order_status_history history
+  WHERE history.order_id = orders.id
+);
+
+CREATE INDEX IF NOT EXISTS delivery_areas_active_idx
+  ON delivery_areas (is_active, name);
+CREATE INDEX IF NOT EXISTS app_users_delivery_area_id_idx
+  ON app_users (delivery_area_id);
+CREATE INDEX IF NOT EXISTS orders_delivery_area_id_idx
+  ON orders (delivery_area_id);
+CREATE INDEX IF NOT EXISTS orders_status_created_at_idx
+  ON orders (status, created_at DESC);
+CREATE INDEX IF NOT EXISTS order_status_history_order_id_idx
+  ON order_status_history (order_id, created_at ASC);

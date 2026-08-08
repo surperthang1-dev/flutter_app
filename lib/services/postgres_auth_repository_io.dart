@@ -26,10 +26,21 @@ class PostgresAuthRepository {
     try {
       final rows = await connection.execute(
         Sql.named('''
-          SELECT id, full_name, phone, email, role, address
-          FROM app_users
-          WHERE phone = @phone
-            AND password_hash = encode(digest(@password, 'sha256'), 'hex')
+          SELECT
+            users.id,
+            users.full_name,
+            users.phone,
+            users.email,
+            users.role,
+            users.address,
+            users.address_detail,
+            users.address_note,
+            users.delivery_area_id,
+            areas.name AS delivery_area_name
+          FROM app_users users
+          LEFT JOIN delivery_areas areas ON areas.id = users.delivery_area_id
+          WHERE users.phone = @phone
+            AND users.password_hash = encode(digest(@password, 'sha256'), 'hex')
           LIMIT 1
         '''),
         parameters: {'phone': phone, 'password': password},
@@ -50,7 +61,9 @@ class PostgresAuthRepository {
     required String phone,
     required String password,
     String? email,
-    String? address,
+    required String addressDetail,
+    required String deliveryAreaId,
+    String? addressNote,
   }) async {
     final connection = await _open();
 
@@ -63,26 +76,59 @@ class PostgresAuthRepository {
             email,
             role,
             password_hash,
-            address
+            address,
+            address_detail,
+            address_note,
+            delivery_area_id
           )
-          VALUES (
+          SELECT
             @fullName,
             @phone,
             NULLIF(@email, ''),
             0,
             encode(digest(@password, 'sha256'), 'hex'),
-            NULLIF(@address, '')
+            NULLIF(@addressDetail, ''),
+            NULLIF(@addressDetail, ''),
+            NULLIF(@addressNote, ''),
+            @deliveryAreaId
+          WHERE EXISTS (
+            SELECT 1
+            FROM delivery_areas
+            WHERE id = @deliveryAreaId
+              AND is_active = TRUE
           )
-          RETURNING id, full_name, phone, email, role, address
+          RETURNING
+            id,
+            full_name,
+            phone,
+            email,
+            role,
+            address,
+            address_detail,
+            address_note,
+            delivery_area_id,
+            (
+              SELECT name
+              FROM delivery_areas
+              WHERE id = app_users.delivery_area_id
+            ) AS delivery_area_name
         '''),
         parameters: {
-          'fullName': fullName,
-          'phone': phone,
+          'fullName': fullName.trim(),
+          'phone': phone.trim(),
           'email': email ?? '',
           'password': password,
-          'address': address ?? '',
+          'addressDetail': addressDetail.trim(),
+          'addressNote': addressNote?.trim() ?? '',
+          'deliveryAreaId': deliveryAreaId,
         },
       );
+
+      if (rows.isEmpty) {
+        throw const AuthException(
+          'Khu vực giao hàng đã tạm ngừng. Vui lòng chọn khu vực khác.',
+        );
+      }
 
       return AuthUser.fromColumnMap(rows.first.toColumnMap());
     } on UniqueViolationException {

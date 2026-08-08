@@ -12,10 +12,6 @@ class CartProvider extends ChangeNotifier {
 
   int get subtotal => _items.fold(0, (sum, item) => sum + item.totalPrice);
 
-  int get deliveryFee => _items.isEmpty ? 0 : 15000;
-
-  int get total => subtotal + deliveryFee;
-
   void addProduct({
     required Product product,
     required String size,

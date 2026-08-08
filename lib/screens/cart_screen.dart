@@ -364,8 +364,6 @@ class _TotalPanel extends StatelessWidget {
           const Divider(color: AppColors.border, height: 1, thickness: 1),
           const SizedBox(height: 16),
           _MoneyRow(label: 'Tạm tính', value: cart.subtotal),
-          const SizedBox(height: 12),
-          _MoneyRow(label: 'Phí vận chuyển', value: cart.deliveryFee),
           const SizedBox(height: 18),
           // Custom Boutique Receipt Dotted Separator
           Row(
@@ -380,7 +378,15 @@ class _TotalPanel extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 18),
-          _MoneyRow(label: 'Tổng cộng', value: cart.total, bold: true),
+          const Text(
+            'Phí giao hàng sẽ được tính theo khu vực đã đăng ký ở bước xác nhận đơn.',
+            style: TextStyle(
+              color: AppColors.textMuted,
+              fontSize: 12.5,
+              height: 1.35,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );
@@ -388,15 +394,10 @@ class _TotalPanel extends StatelessWidget {
 }
 
 class _MoneyRow extends StatelessWidget {
-  const _MoneyRow({
-    required this.label,
-    required this.value,
-    this.bold = false,
-  });
+  const _MoneyRow({required this.label, required this.value});
 
   final String label;
   final int value;
-  final bool bold;
 
   @override
   Widget build(BuildContext context) {
@@ -406,16 +407,16 @@ class _MoneyRow extends StatelessWidget {
         Text(
           label,
           style: TextStyle(
-            color: bold ? AppColors.textDark : AppColors.textMuted,
-            fontWeight: bold ? FontWeight.w900 : FontWeight.w600,
-            fontSize: bold ? 16 : 14.5,
+            color: AppColors.textMuted,
+            fontWeight: FontWeight.w600,
+            fontSize: 14.5,
           ),
         ),
         Text(
           formatVnd(value),
           style: TextStyle(
-            color: bold ? AppColors.caramel : AppColors.textDark,
-            fontSize: bold ? 20 : 15.5,
+            color: AppColors.textDark,
+            fontSize: 15.5,
             fontWeight: FontWeight.w900,
           ),
         ),

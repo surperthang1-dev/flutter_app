@@ -6,6 +6,7 @@ import 'package:postgres/postgres.dart';
 import '../config/database_config.dart';
 import '../models/admin_order.dart';
 import '../models/product.dart';
+import 'order_repository.dart';
 
 class AdminSummary {
   const AdminSummary({
@@ -65,82 +66,7 @@ class AdminRepository {
   }
 
   Future<List<AdminOrder>> fetchOrders() async {
-    final connection = await _open();
-    try {
-      final orderRows = await connection.execute('''
-        SELECT
-          id,
-          customer_name,
-          customer_phone,
-          delivery_address,
-          payment_method,
-          status,
-          subtotal,
-          delivery_fee,
-          total,
-          created_at
-        FROM orders
-        ORDER BY created_at DESC
-        LIMIT 100
-      ''');
-
-      final itemRows = await connection.execute('''
-        SELECT
-          order_id,
-          product_id,
-          product_name,
-          unit_price,
-          quantity,
-          size,
-          sugar,
-          ice,
-          COALESCE(note, '') AS note,
-          line_total
-        FROM order_items
-        ORDER BY id ASC
-      ''');
-
-      final itemsByOrder = <String, List<AdminOrderItem>>{};
-      for (final row in itemRows) {
-        final data = row.toColumnMap();
-        final orderId = data['order_id'] as String;
-        itemsByOrder
-            .putIfAbsent(orderId, () => [])
-            .add(
-              AdminOrderItem(
-                productId: data['product_id'] as String,
-                productName: data['product_name'] as String,
-                unitPrice: data['unit_price'] as int,
-                quantity: data['quantity'] as int,
-                size: data['size'] as String,
-                sugar: data['sugar'] as String,
-                ice: data['ice'] as String,
-                note: data['note'] as String,
-                lineTotal: data['line_total'] as int,
-              ),
-            );
-      }
-
-      return orderRows.map((row) {
-        final data = row.toColumnMap();
-        final id = data['id'] as String;
-        return AdminOrder(
-          id: id,
-          customerName: data['customer_name'] as String,
-          customerPhone: data['customer_phone'] as String,
-          deliveryAddress: data['delivery_address'] as String,
-          paymentMethod: data['payment_method'] as String,
-          status: data['status'] as String,
-          subtotal: data['subtotal'] as int,
-          deliveryFee: data['delivery_fee'] as int,
-          total: data['total'] as int,
-          createdAt: data['created_at'] as DateTime,
-          items: itemsByOrder[id] ?? const [],
-        );
-      }).toList();
-    } finally {
-      await connection.close();
-    }
+    return OrderRepository(config: config).fetchAllOrders();
   }
 
   Future<List<Product>> fetchProducts() async {

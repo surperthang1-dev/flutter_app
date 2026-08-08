@@ -29,7 +29,9 @@ class PostgresAuthRepository {
     required String phone,
     required String password,
     String? email,
-    String? address,
+    required String addressDetail,
+    required String deliveryAreaId,
+    String? addressNote,
   }) async {
     throw const AuthException(
       'Bản Chrome/web không thể tạo tài khoản trực tiếp với PostgreSQL. Hãy chạy app Windows/native.',

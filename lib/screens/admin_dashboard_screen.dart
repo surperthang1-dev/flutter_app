@@ -8,6 +8,8 @@ import '../utils/app_colors.dart';
 import '../utils/currency_formatter.dart';
 import '../widgets/primary_button.dart';
 import '../widgets/product_visual.dart';
+import 'admin_delivery_areas_screen.dart';
+import 'admin_order_detail_screen.dart';
 import 'login_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
@@ -44,6 +46,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         title: const Text('Quản trị Coffee Việt 24H'),
         backgroundColor: AppColors.background,
         actions: [
+          IconButton(
+            tooltip: 'Khu vực & phí giao hàng',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const AdminDeliveryAreasScreen(),
+                ),
+              );
+            },
+            icon: const Icon(Icons.local_shipping_rounded),
+          ),
           IconButton(
             tooltip: 'Đăng xuất',
             onPressed: _logout,
@@ -256,6 +269,7 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
   final _repository = const AdminRepository();
   late Future<List<AdminOrder>> _future;
   String? _exportingId;
+  String? _selectedStatus;
 
   @override
   void initState() {
@@ -313,18 +327,80 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
                 title: 'Chưa có đơn hàng',
                 body: 'Khi khách thanh toán, đơn sẽ xuất hiện ở đây.',
               )
-            else
-              ...snapshot.data!.map(
-                (order) => _OrderTile(
-                  order: order,
-                  isExporting: _exportingId == order.id,
-                  onExport: () => _export(order),
-                ),
+            else ...[
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  ChoiceChip(
+                    label: const Text('Tất cả'),
+                    selected: _selectedStatus == null,
+                    onSelected: (_) => setState(() => _selectedStatus = null),
+                  ),
+                  ...[
+                    'pending',
+                    'confirmed',
+                    'preparing',
+                    'delivering',
+                    'completed',
+                    'cancelled',
+                  ].map(
+                    (status) => ChoiceChip(
+                      label: Text(_statusLabel(status)),
+                      selected: _selectedStatus == status,
+                      onSelected: (_) =>
+                          setState(() => _selectedStatus = status),
+                    ),
+                  ),
+                ],
               ),
+              const SizedBox(height: 14),
+              ...snapshot.data!
+                  .where(
+                    (order) =>
+                        _selectedStatus == null ||
+                        order.status == _selectedStatus,
+                  )
+                  .map(
+                    (order) => _OrderTile(
+                      order: order,
+                      isExporting: _exportingId == order.id,
+                      onExport: () => _export(order),
+                      onManage: () async {
+                        final updated = await Navigator.of(context).push<bool>(
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                AdminOrderDetailScreen(order: order),
+                          ),
+                        );
+                        if (updated == true) _refresh();
+                      },
+                    ),
+                  ),
+            ],
           ],
         );
       },
     );
+  }
+
+  String _statusLabel(String status) {
+    switch (status) {
+      case 'pending':
+        return 'Chờ xác nhận';
+      case 'confirmed':
+        return 'Đã xác nhận';
+      case 'preparing':
+        return 'Đang chuẩn bị';
+      case 'delivering':
+        return 'Đang giao';
+      case 'completed':
+        return 'Hoàn thành';
+      case 'cancelled':
+        return 'Đã hủy';
+      default:
+        return status;
+    }
   }
 }
 
@@ -734,11 +810,13 @@ class _OrderTile extends StatelessWidget {
     required this.order,
     required this.isExporting,
     required this.onExport,
+    required this.onManage,
   });
 
   final AdminOrder order;
   final bool isExporting;
   final VoidCallback onExport;
+  final VoidCallback onManage;
 
   @override
   Widget build(BuildContext context) {
@@ -803,6 +881,8 @@ class _OrderTile extends StatelessWidget {
               _MiniChip('${order.itemCount} món'),
               _MiniChip(order.paymentMethod),
               _MiniChip(formatVnd(order.total)),
+              if (order.deliveryAreaName?.isNotEmpty == true)
+                _MiniChip(order.deliveryAreaName!),
             ],
           ),
           const SizedBox(height: 10),
@@ -821,6 +901,14 @@ class _OrderTile extends StatelessWidget {
                   ),
                 ),
               ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: onManage,
+              icon: const Icon(Icons.manage_accounts_rounded),
+              label: const Text('Xử lý đơn'),
+            ),
+          ),
           Align(
             alignment: Alignment.centerRight,
             child: TextButton.icon(

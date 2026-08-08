@@ -29,7 +29,8 @@ class ProfileScreen extends StatelessWidget {
           _ProfileHeader(
             name: user?.fullName ?? 'Khách hàng',
             phone: user?.phone ?? 'Chưa đăng nhập',
-            address: user?.address,
+            address: user?.displayAddress,
+            deliveryAreaName: user?.deliveryAreaName,
           ),
           const SizedBox(height: 22),
           const _SectionLabel('Tài khoản của tôi'),
@@ -45,8 +46,8 @@ class ProfileScreen extends StatelessWidget {
               _ProfileTile(
                 icon: Icons.location_on_outlined,
                 title: 'Địa chỉ giao hàng',
-                subtitle: user?.address?.isNotEmpty == true
-                    ? user!.address!
+                subtitle: user?.displayAddress?.isNotEmpty == true
+                    ? user!.displayAddress!
                     : 'Chưa lưu địa chỉ',
                 onTap: () {},
               ),
@@ -104,11 +105,13 @@ class _ProfileHeader extends StatelessWidget {
     required this.name,
     required this.phone,
     required this.address,
+    required this.deliveryAreaName,
   });
 
   final String name;
   final String phone;
   final String? address;
+  final String? deliveryAreaName;
 
   @override
   Widget build(BuildContext context) {
@@ -166,6 +169,17 @@ class _ProfileHeader extends StatelessWidget {
                     style: TextStyle(
                       color: Colors.white.withValues(alpha: 0.72),
                       fontSize: 12,
+                    ),
+                  ),
+                ],
+                if (deliveryAreaName?.isNotEmpty == true) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    deliveryAreaName!,
+                    style: TextStyle(
+                      color: AppColors.caramel.withValues(alpha: 0.95),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
                 ],

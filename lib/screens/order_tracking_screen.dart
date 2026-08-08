@@ -1,219 +1,382 @@
 import 'package:flutter/material.dart';
 
+import '../models/admin_order.dart';
+import '../models/order_status.dart';
+import '../providers/auth_provider.dart';
+import '../services/order_repository.dart';
 import '../utils/app_colors.dart';
+import '../utils/currency_formatter.dart';
 import '../widgets/order_timeline.dart';
 
-class OrderTrackingScreen extends StatelessWidget {
-  const OrderTrackingScreen({super.key, this.showAppBar = false, this.orderId});
+class OrderTrackingScreen extends StatefulWidget {
+  const OrderTrackingScreen({
+    super.key,
+    this.showAppBar = false,
+    required this.orderId,
+  });
 
   final bool showAppBar;
-  final String? orderId;
+  final String orderId;
+
+  @override
+  State<OrderTrackingScreen> createState() => _OrderTrackingScreenState();
+}
+
+class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
+  final _repository = const OrderRepository();
+  Future<AdminOrder?>? _future;
+  String? _userId;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final user = AuthScope.of(context).user;
+    if (user == null || user.id == _userId) return;
+    _userId = user.id;
+    _future = _repository.fetchOrderForUser(
+      userId: user.id,
+      orderId: widget.orderId,
+    );
+  }
+
+  Future<void> _refresh() async {
+    final user = AuthScope.of(context).user;
+    if (user == null) return;
+    setState(() {
+      _future = _repository.fetchOrderForUser(
+        userId: user.id,
+        orderId: widget.orderId,
+      );
+    });
+    await _future;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final code = orderId ?? 'CFV-ĐƠN-MỚI';
-    final eta = DateTime.now().add(const Duration(minutes: 25));
-    final etaText =
-        '${eta.hour.toString().padLeft(2, '0')}:${eta.minute.toString().padLeft(2, '0')} hôm nay';
-
-    final content = ListView(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 120),
-      children: [
-        Container(
-          padding: const EdgeInsets.all(22),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: AppColors.border, width: 1.2),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Mã đơn hàng',
-                          style: TextStyle(
-                            color: AppColors.textMuted,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          code,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: AppColors.textDark,
-                            fontSize: 21,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.caramel.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: AppColors.caramel.withValues(alpha: 0.25),
-                      ),
-                    ),
-                    child: const Text(
-                      'Đang xử lý',
+    final content = _future == null
+        ? const Center(child: CircularProgressIndicator())
+        : FutureBuilder<AdminOrder?>(
+            future: _future,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState != ConnectionState.done) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snapshot.hasError) {
+                return _TrackingMessage(
+                  icon: Icons.error_outline_rounded,
+                  title: 'Không thể tải đơn hàng',
+                  body: snapshot.error.toString(),
+                  onRetry: _refresh,
+                );
+              }
+              final order = snapshot.data;
+              if (order == null) {
+                return _TrackingMessage(
+                  icon: Icons.receipt_long_outlined,
+                  title: 'Không tìm thấy đơn hàng',
+                  body: 'Đơn hàng có thể không thuộc tài khoản hiện tại.',
+                  onRetry: _refresh,
+                );
+              }
+              return RefreshIndicator(
+                onRefresh: _refresh,
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+                  children: [
+                    _OrderHeader(order: order),
+                    const SizedBox(height: 20),
+                    _OrderItemsCard(order: order),
+                    const SizedBox(height: 20),
+                    const Text(
+                      'Trạng thái đơn hàng',
                       style: TextStyle(
-                        color: AppColors.caramel,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 12,
+                        color: AppColors.textDark,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
                       ),
                     ),
-                  ),
-                ],
-              ),
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 16),
-                child: Divider(color: AppColors.border, height: 1),
-              ),
-              Row(
-                children: [
-                  const Icon(
-                    Icons.schedule_rounded,
-                    size: 22,
-                    color: AppColors.orange,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Thời gian giao dự kiến',
-                          style: TextStyle(
-                            color: AppColors.textMuted,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '20 - 30 phút, $etaText',
-                          style: const TextStyle(
-                            color: AppColors.textDark,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 14.5,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 20),
-        Container(
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: AppColors.border, width: 1.2),
-          ),
-          child: Row(
+                    const SizedBox(height: 14),
+                    OrderTimeline(order: order),
+                  ],
+                ),
+              );
+            },
+          );
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        title: const Text('Chi tiết đơn hàng'),
+        leading: widget.showAppBar
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+                onPressed: () => Navigator.of(context).pop(),
+              )
+            : null,
+      ),
+      body: content,
+    );
+  }
+}
+
+class _OrderHeader extends StatelessWidget {
+  const _OrderHeader({required this.order});
+
+  final AdminOrder order;
+
+  @override
+  Widget build(BuildContext context) {
+    final cancelled = order.cancelReason?.trim().isNotEmpty == true;
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Container(
-                width: 54,
-                height: 54,
-                decoration: BoxDecoration(
-                  color: AppColors.coffee.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: const Icon(
-                  Icons.delivery_dining_rounded,
-                  color: AppColors.caramel,
-                  size: 32,
-                ),
-              ),
-              const SizedBox(width: 16),
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Coffee Việt 24H',
-                      style: TextStyle(
-                        color: AppColors.textDark,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 16,
-                      ),
-                    ),
-                    SizedBox(height: 4),
-                    Text(
-                      'Quán đã nhận đơn và đang chuẩn bị đồ uống.',
+                    const Text(
+                      'Mã đơn hàng',
                       style: TextStyle(
                         color: AppColors.textMuted,
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '#${order.shortId}',
+                      style: const TextStyle(
+                        color: AppColors.textDark,
+                        fontSize: 21,
+                        fontWeight: FontWeight.w900,
                       ),
                     ),
                   ],
                 ),
               ),
-              const Icon(Icons.local_cafe_rounded, color: AppColors.caramel),
+              _StatusChip(order: order),
             ],
           ),
-        ),
-        const SizedBox(height: 28),
-        const Text(
-          'Trạng thái giao hàng',
-          style: TextStyle(
-            color: AppColors.textDark,
-            fontSize: 18,
-            fontWeight: FontWeight.w900,
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 14),
+            child: Divider(color: AppColors.border),
           ),
-        ),
-        const SizedBox(height: 18),
-        const OrderTimeline(),
-      ],
-    );
-
-    if (showAppBar) {
-      return Scaffold(
-        backgroundColor: AppColors.background,
-        appBar: AppBar(
-          title: const Text('Theo dõi đơn hàng'),
-          centerTitle: true,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
-            onPressed: () => Navigator.of(context).pop(),
+          _InfoLine(Icons.location_on_outlined, order.deliveryAddress),
+          if (order.deliveryAreaName?.isNotEmpty == true) ...[
+            const SizedBox(height: 8),
+            _InfoLine(Icons.local_shipping_outlined, order.deliveryAreaName!),
+          ],
+          const SizedBox(height: 12),
+          _MoneyLine('Tiền sản phẩm', order.subtotal),
+          const SizedBox(height: 6),
+          _MoneyLine('Phí giao hàng', order.deliveryFee),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 10),
+            child: Divider(color: AppColors.border),
           ),
-          backgroundColor: AppColors.background,
-          elevation: 0,
-        ),
-        body: content,
-      );
-    }
-
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('Đơn hàng'),
-        centerTitle: true,
-        backgroundColor: AppColors.background,
-        elevation: 0,
+          _MoneyLine('Tổng thanh toán', order.total, highlight: true),
+          if (cancelled) ...[
+            const SizedBox(height: 14),
+            Text(
+              'Lý do hủy: ${order.cancelReason}',
+              style: TextStyle(color: Colors.red.shade700, height: 1.35),
+            ),
+          ],
+        ],
       ),
-      body: content,
     );
   }
+}
+
+class _OrderItemsCard extends StatelessWidget {
+  const _OrderItemsCard({required this.order});
+
+  final AdminOrder order;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: AppColors.border),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Sản phẩm',
+          style: TextStyle(
+            color: AppColors.textDark,
+            fontWeight: FontWeight.w900,
+            fontSize: 17,
+          ),
+        ),
+        const SizedBox(height: 10),
+        ...order.items.map(
+          (item) => Padding(
+            padding: const EdgeInsets.symmetric(vertical: 7),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${item.quantity} × ${item.productName}',
+                        style: const TextStyle(
+                          color: AppColors.textDark,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      Text(
+                        '${item.size} · đường ${item.sugar} · đá ${item.ice}',
+                        style: const TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Text(
+                  formatVnd(item.lineTotal),
+                  style: const TextStyle(
+                    color: AppColors.coffee,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _StatusChip extends StatelessWidget {
+  const _StatusChip({required this.order});
+
+  final AdminOrder order;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = switch (order.orderStatus) {
+      _ when order.orderStatus.name == 'cancelled' => Colors.red.shade700,
+      _ when order.orderStatus.name == 'completed' => AppColors.success,
+      _ when order.orderStatus.name == 'pending' => AppColors.caramel,
+      _ => AppColors.coffee,
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        order.orderStatus.label,
+        style: TextStyle(
+          color: color,
+          fontWeight: FontWeight.w800,
+          fontSize: 12,
+        ),
+      ),
+    );
+  }
+}
+
+class _InfoLine extends StatelessWidget {
+  const _InfoLine(this.icon, this.text);
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Icon(icon, size: 18, color: AppColors.caramel),
+      const SizedBox(width: 8),
+      Expanded(
+        child: Text(text, style: const TextStyle(color: AppColors.textMuted)),
+      ),
+    ],
+  );
+}
+
+class _MoneyLine extends StatelessWidget {
+  const _MoneyLine(this.label, this.value, {this.highlight = false});
+
+  final String label;
+  final int value;
+  final bool highlight;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    children: [
+      Text(
+        label,
+        style: TextStyle(
+          color: highlight ? AppColors.textDark : AppColors.textMuted,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+      Text(
+        formatVnd(value),
+        style: TextStyle(
+          color: highlight ? AppColors.caramel : AppColors.textDark,
+          fontWeight: FontWeight.w900,
+          fontSize: highlight ? 18 : 14,
+        ),
+      ),
+    ],
+  );
+}
+
+class _TrackingMessage extends StatelessWidget {
+  const _TrackingMessage({
+    required this.icon,
+    required this.title,
+    required this.body,
+    required this.onRetry,
+  });
+
+  final IconData icon;
+  final String title;
+  final String body;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) => Center(
+    child: Padding(
+      padding: const EdgeInsets.all(28),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: AppColors.caramel, size: 48),
+          const SizedBox(height: 12),
+          Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+          const SizedBox(height: 8),
+          Text(body, textAlign: TextAlign.center),
+          const SizedBox(height: 14),
+          OutlinedButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('Tải lại'),
+          ),
+        ],
+      ),
+    ),
+  );
 }

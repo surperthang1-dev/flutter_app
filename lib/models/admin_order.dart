@@ -1,3 +1,5 @@
+import 'order_status.dart';
+
 class AdminOrder {
   const AdminOrder({
     required this.id,
@@ -11,6 +13,14 @@ class AdminOrder {
     required this.total,
     required this.createdAt,
     required this.items,
+    this.deliveryAreaId,
+    this.deliveryAreaName,
+    this.cancelReason,
+    this.confirmedAt,
+    this.preparingAt,
+    this.deliveringAt,
+    this.completedAt,
+    this.cancelledAt,
   });
 
   final String id;
@@ -24,10 +34,20 @@ class AdminOrder {
   final int total;
   final DateTime createdAt;
   final List<AdminOrderItem> items;
+  final String? deliveryAreaId;
+  final String? deliveryAreaName;
+  final String? cancelReason;
+  final DateTime? confirmedAt;
+  final DateTime? preparingAt;
+  final DateTime? deliveringAt;
+  final DateTime? completedAt;
+  final DateTime? cancelledAt;
 
   int get itemCount => items.fold(0, (sum, item) => sum + item.quantity);
 
   String get shortId => id.length <= 8 ? id : id.substring(id.length - 8);
+
+  OrderStatus get orderStatus => OrderStatusX.fromDatabase(status);
 }
 
 class AdminOrderItem {

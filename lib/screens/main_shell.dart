@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../providers/cart_provider.dart';
 import 'cart_screen.dart';
 import 'home_screen.dart';
-import 'order_tracking_screen.dart';
+import 'my_orders_screen.dart';
 import 'profile_screen.dart';
 
 class MainShell extends StatefulWidget {
@@ -22,7 +22,7 @@ class _MainShellState extends State<MainShell> {
     final screens = const [
       HomeScreen(),
       CartScreen(),
-      OrderTrackingScreen(),
+      MyOrdersScreen(),
       ProfileScreen(),
     ];
 

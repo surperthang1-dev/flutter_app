@@ -1,9 +1,9 @@
 $ErrorActionPreference = 'Stop'
 
-$postgresBin = 'F:\postgresql\pgsql\bin'
-$dataDir = 'F:\postgresql\data'
-$logFile = 'F:\postgresql\logs\postgresql.log'
-$appExe = 'F:\flutter\flutter_app\build\windows\x64\runner\Release\flutter_app.exe'
+$postgresBin = 'F:\Postgre\bin'
+$dataDir = 'F:\Postgre\data'
+$logFile = 'F:\Postgre\postgresql.log'
+$appExe = 'F:\flutter\build\windows\x64\runner\Debug\flutter_app.exe'
 $appDir = Split-Path -Parent $appExe
 
 $pgCtl = Join-Path $postgresBin 'pg_ctl.exe'
@@ -16,8 +16,7 @@ if ($LASTEXITCODE -ne 0) {
   Start-Sleep -Seconds 2
 }
 
-$env:PGPASSWORD = 'postgres'
-& $psql -h 127.0.0.1 -p 5432 -U postgres -d coffee_viet_24h -c 'SELECT 1;' *> $null
+& $psql -w -h 127.0.0.1 -p 5432 -U postgres -d coffee_viet_24h -c 'SELECT 1;' *> $null
 if ($LASTEXITCODE -ne 0) {
   throw 'PostgreSQL is not ready on 127.0.0.1:5432.'
 }

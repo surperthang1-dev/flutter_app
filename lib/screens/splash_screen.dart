@@ -15,13 +15,14 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen> {
   Timer? _timer;
+  Timer? _animationTimer;
   bool _animate = false;
 
   @override
   void initState() {
     super.initState();
     // Start animations shortly after mounting
-    Future.delayed(const Duration(milliseconds: 150), () {
+    _animationTimer = Timer(const Duration(milliseconds: 150), () {
       if (mounted) {
         setState(() => _animate = true);
       }
@@ -44,6 +45,7 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void dispose() {
     _timer?.cancel();
+    _animationTimer?.cancel();
     super.dispose();
   }
 
