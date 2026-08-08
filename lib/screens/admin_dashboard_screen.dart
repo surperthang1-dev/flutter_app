@@ -120,7 +120,9 @@ class _AdminHomePageState extends State<AdminHomePage> {
   }
 
   void _refresh() {
-    setState(() => _future = _repository.fetchSummary());
+    setState(() {
+      _future = _repository.fetchSummary();
+    });
   }
 
   @override
@@ -169,7 +171,9 @@ class _AdminProductsPageState extends State<AdminProductsPage> {
   }
 
   void _refresh() {
-    setState(() => _future = _repository.fetchProducts());
+    setState(() {
+      _future = _repository.fetchProducts();
+    });
   }
 
   Future<void> _openEditor([Product? product]) async {
@@ -289,7 +293,9 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
   }
 
   void _refresh() {
-    setState(() => _future = _repository.fetchOrders());
+    setState(() {
+      _future = _repository.fetchOrders();
+    });
   }
 
   Future<void> _export(AdminOrder order) async {
@@ -431,7 +437,9 @@ class _AdminStatsPageState extends State<AdminStatsPage> {
   }
 
   void _refresh() {
-    setState(() => _future = _repository.fetchSummary());
+    setState(() {
+      _future = _repository.fetchSummary();
+    });
   }
 
   @override
