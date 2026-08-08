@@ -155,9 +155,7 @@ class AdminRepository {
     try {
       await connection.execute(
         Sql.named('''
-          UPDATE products
-          SET is_active = FALSE,
-              updated_at = NOW()
+          DELETE FROM products
           WHERE id = @id
         '''),
         parameters: {'id': id},

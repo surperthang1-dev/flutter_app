@@ -131,8 +131,6 @@ class _AdminHomePageState extends State<AdminHomePage> {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(18, 12, 18, 120),
         children: [
-          _AdminHeader(name: user?.fullName ?? 'Admin'),
-          const SizedBox(height: 18),
           FutureBuilder<AdminSummary>(
             future: _future,
             builder: (context, snapshot) {
@@ -140,15 +138,12 @@ class _AdminHomePageState extends State<AdminHomePage> {
                 return const _LoadingBlock();
               }
               if (snapshot.hasError) return _ErrorBlock(error: snapshot.error);
-              return _SummaryGrid(summary: snapshot.data!);
+              return _DashboardOverview(
+                name: user?.fullName ?? 'Admin',
+                summary: snapshot.data!,
+                onRefresh: _refresh,
+              );
             },
-          ),
-          const SizedBox(height: 18),
-          const _InfoPanel(
-            icon: Icons.verified_user_rounded,
-            title: 'Quyền quản trị',
-            body:
-                'Admin có quyền thêm, sửa, ẩn sản phẩm, xem đơn hàng, theo dõi doanh thu và xuất hoá đơn từ PostgreSQL.',
           ),
         ],
       ),
@@ -195,23 +190,41 @@ class _AdminProductsPageState extends State<AdminProductsPage> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Ẩn sản phẩm'),
-        content: Text('Ẩn "${product.name}" khỏi menu đang bán?'),
+        title: const Text('Xoá sản phẩm'),
+        content: Text('Xoá vĩnh viễn "${product.name}" khỏi menu?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
             child: const Text('Huỷ'),
           ),
           FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red.shade700),
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Ẩn'),
+            child: const Text('Xoá'),
           ),
         ],
       ),
     );
     if (confirmed != true) return;
-    await _repository.deleteProduct(product.id);
-    _refresh();
+    try {
+      await _repository.deleteProduct(product.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Đã xoá ${product.name}'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      _refresh();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Không thể xoá sản phẩm: $error'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   @override
@@ -224,8 +237,6 @@ class _AdminProductsPageState extends State<AdminProductsPage> {
           children: [
             _PageTitle(
               title: 'Sản phẩm',
-              subtitle:
-                  'CRUD menu coffee và ảnh sản phẩm ánh xạ trực tiếp PostgreSQL.',
               action: IconButton.filled(
                 tooltip: 'Thêm sản phẩm',
                 onPressed: () => _openEditor(),
@@ -308,8 +319,6 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
           children: [
             _PageTitle(
               title: 'Đơn hàng',
-              subtitle:
-                  'Đơn mới tạo từ app được lưu trong bảng orders và order_items.',
               action: IconButton.filled(
                 tooltip: 'Làm mới',
                 onPressed: _refresh,
@@ -432,7 +441,6 @@ class _AdminStatsPageState extends State<AdminStatsPage> {
       children: [
         _PageTitle(
           title: 'Thống kê',
-          subtitle: 'Theo dõi dữ liệu vận hành từ PostgreSQL.',
           action: IconButton.filled(
             tooltip: 'Làm mới',
             onPressed: _refresh,
@@ -514,30 +522,14 @@ class _AdminInvoicePageState extends State<AdminInvoicePage> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(18, 12, 18, 120),
       children: [
-        const _PageTitle(
-          title: 'Hoá đơn',
-          subtitle: 'Xuất file .txt từ dữ liệu PostgreSQL.',
-        ),
-        const SizedBox(height: 14),
-        const _InfoPanel(
-          icon: Icons.receipt_long_rounded,
-          title: 'Hoá đơn đơn hàng',
-          body:
-              'Xuất hoá đơn cho đơn mới nhất, gồm thông tin khách hàng, món đã mua, phí giao hàng và tổng thanh toán.',
-        ),
-        const SizedBox(height: 14),
+        const _PageTitle(title: 'Hoá đơn'),
+        const SizedBox(height: 20),
         PrimaryButton(
           label: _isExportingOrder
               ? 'Đang xuất...'
               : 'Xuất hoá đơn đơn mới nhất',
           icon: Icons.download_rounded,
           onPressed: _isExportingOrder ? null : _exportLatestOrder,
-        ),
-        const SizedBox(height: 22),
-        const _InfoPanel(
-          icon: Icons.menu_book_rounded,
-          title: 'Bảng giá menu',
-          body: 'Xuất danh sách sản phẩm đang bán để đối soát hoặc in menu.',
         ),
         const SizedBox(height: 14),
         PrimaryButton(
@@ -550,67 +542,10 @@ class _AdminInvoicePageState extends State<AdminInvoicePage> {
   }
 }
 
-class _AdminHeader extends StatelessWidget {
-  const _AdminHeader({required this.name});
-
-  final String name;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppColors.coffeeDark,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: AppColors.caramel.withValues(alpha: 0.35)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              color: AppColors.caramel,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Icon(Icons.admin_panel_settings_rounded),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Điều hành menu, đơn hàng và doanh thu',
-                  style: TextStyle(
-                    color: AppColors.caramel,
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _PageTitle extends StatelessWidget {
-  const _PageTitle({required this.title, required this.subtitle, this.action});
+  const _PageTitle({required this.title, this.action});
 
   final String title;
-  final String subtitle;
   final Widget? action;
 
   @override
@@ -629,15 +564,6 @@ class _PageTitle extends StatelessWidget {
                   fontWeight: FontWeight.w900,
                 ),
               ),
-              const SizedBox(height: 4),
-              Text(
-                subtitle,
-                style: const TextStyle(
-                  color: AppColors.textMuted,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
             ],
           ),
         ),
@@ -647,89 +573,281 @@ class _PageTitle extends StatelessWidget {
   }
 }
 
-class _SummaryGrid extends StatelessWidget {
-  const _SummaryGrid({required this.summary});
+class _DashboardOverview extends StatelessWidget {
+  const _DashboardOverview({
+    required this.name,
+    required this.summary,
+    required this.onRefresh,
+  });
 
+  final String name;
   final AdminSummary summary;
+  final VoidCallback onRefresh;
 
   @override
   Widget build(BuildContext context) {
     final items = [
-      _SummaryItem(
-        'Doanh thu',
+      _DashboardMetric(
+        'Tổng doanh thu',
         formatVnd(summary.revenue),
-        Icons.payments_rounded,
+        Icons.account_balance_wallet_rounded,
+        AppColors.caramel,
       ),
-      _SummaryItem(
+      _DashboardMetric(
         'Đơn hàng',
         summary.orderCount.toString(),
-        Icons.receipt_rounded,
+        Icons.receipt_long_rounded,
+        AppColors.orange,
       ),
-      _SummaryItem(
+      _DashboardMetric(
         'Sản phẩm',
         summary.productCount.toString(),
         Icons.coffee_rounded,
+        AppColors.success,
       ),
-      _SummaryItem(
-        'User',
+      _DashboardMetric(
+        'Khách hàng',
         summary.userCount.toString(),
         Icons.people_alt_rounded,
+        AppColors.espresso,
       ),
     ];
 
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: items.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-        childAspectRatio: 1.55,
-      ),
-      itemBuilder: (context, index) {
-        final item = items[index];
-        return Container(
-          padding: const EdgeInsets.all(16),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: AppColors.border),
+            gradient: const LinearGradient(
+              colors: [AppColors.coffeeDark, AppColors.espresso],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x2A211915),
+                blurRadius: 20,
+                offset: Offset(0, 10),
+              ),
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Icon(item.icon, color: AppColors.caramel),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              Row(
                 children: [
-                  Text(
-                    item.value,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AppColors.textDark,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Icon(
+                      Icons.admin_panel_settings_rounded,
+                      color: AppColors.cream,
                     ),
                   ),
-                  Text(
-                    item.label,
-                    style: const TextStyle(
-                      color: AppColors.textMuted,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
+                  ),
+                  IconButton(
+                    tooltip: 'Làm mới',
+                    onPressed: onRefresh,
+                    icon: const Icon(
+                      Icons.refresh_rounded,
+                      color: AppColors.cream,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'DOANH THU HÔM NAY',
+                style: TextStyle(
+                  color: AppColors.caramel,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.1,
+                ),
+              ),
+              const SizedBox(height: 6),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  formatVnd(summary.todayRevenue),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 34,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Container(height: 1, color: Colors.white.withValues(alpha: 0.16)),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  _HeroMetric(
+                    label: 'Sản phẩm',
+                    value: summary.productCount.toString(),
+                  ),
+                  Container(
+                    width: 1,
+                    height: 28,
+                    color: Colors.white.withValues(alpha: 0.16),
+                  ),
+                  _HeroMetric(
+                    label: 'Đơn hàng',
+                    value: summary.orderCount.toString(),
                   ),
                 ],
               ),
             ],
           ),
-        );
-      },
+        ),
+        const SizedBox(height: 20),
+        const Text(
+          'Tổng quan',
+          style: TextStyle(
+            color: AppColors.textDark,
+            fontSize: 19,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: 12),
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: items.length,
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            childAspectRatio: 1.2,
+          ),
+          itemBuilder: (context, index) =>
+              _DashboardMetricCard(item: items[index]),
+        ),
+      ],
     );
   }
+}
+
+class _HeroMetric extends StatelessWidget {
+  const _HeroMetric({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: const TextStyle(
+              color: AppColors.cream,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DashboardMetricCard extends StatelessWidget {
+  const _DashboardMetricCard({required this.item});
+
+  final _DashboardMetric item;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: item.color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(item.icon, color: item.color, size: 21),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  item.value,
+                  style: const TextStyle(
+                    color: AppColors.textDark,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                item.label,
+                style: const TextStyle(
+                  color: AppColors.textMuted,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DashboardMetric {
+  const _DashboardMetric(this.label, this.value, this.icon, this.color);
+
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
 }
 
 class _ProductAdminTile extends StatelessWidget {
@@ -795,9 +913,10 @@ class _ProductAdminTile extends StatelessWidget {
             icon: const Icon(Icons.edit_rounded),
           ),
           IconButton(
-            tooltip: 'Ẩn',
+            tooltip: 'Xoá sản phẩm',
             onPressed: onDelete,
-            icon: const Icon(Icons.visibility_off_outlined),
+            color: Colors.red.shade700,
+            icon: const Icon(Icons.delete_outline_rounded),
           ),
         ],
       ),
@@ -1199,8 +1318,6 @@ class _ProductEditorState extends State<_ProductEditor> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 10),
-                const _DbMappingNote(),
                 const SizedBox(height: 14),
                 Row(
                   children: [
@@ -1318,92 +1435,6 @@ class _StatRow extends StatelessWidget {
   }
 }
 
-class _DbMappingNote extends StatelessWidget {
-  const _DbMappingNote();
-
-  @override
-  Widget build(BuildContext context) {
-    const mappings = [
-      'Mã -> id',
-      'Tên -> name',
-      'Mô tả -> description',
-      'Giá -> price',
-      'Danh mục -> category',
-      'Nhãn ảnh -> image_label',
-      'Ảnh -> image_asset',
-      'Màu -> accent_color',
-    ];
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.caramel.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.caramel.withValues(alpha: 0.18)),
-      ),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: mappings.map((item) => _MiniChip(item)).toList(),
-      ),
-    );
-  }
-}
-
-class _InfoPanel extends StatelessWidget {
-  const _InfoPanel({
-    required this.icon,
-    required this.title,
-    required this.body,
-  });
-
-  final IconData icon;
-  final String title;
-  final String body;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: AppColors.caramel, size: 30),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    color: AppColors.textDark,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  body,
-                  style: const TextStyle(
-                    color: AppColors.textMuted,
-                    fontSize: 12.5,
-                    height: 1.35,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _MiniChip extends StatelessWidget {
   const _MiniChip(this.label);
 
@@ -1501,12 +1532,4 @@ class _ErrorBlock extends StatelessWidget {
       ),
     );
   }
-}
-
-class _SummaryItem {
-  const _SummaryItem(this.label, this.value, this.icon);
-
-  final String label;
-  final String value;
-  final IconData icon;
 }
