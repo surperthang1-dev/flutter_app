@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../data/mock_products.dart';
@@ -7,8 +9,10 @@ import '../providers/auth_provider.dart';
 import '../providers/cart_provider.dart';
 import '../services/postgres_product_repository.dart';
 import '../services/category_repository.dart';
+import '../services/notification_repository.dart';
 import '../utils/app_colors.dart';
 import '../widgets/product_card.dart';
+import 'notifications_screen.dart';
 import 'product_detail_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -133,7 +137,7 @@ class _HomeScreenState extends State<HomeScreen> {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(18, 12, 18, 104),
             children: [
-              _HomeHeader(name: user?.fullName ?? 'bạn'),
+              _HomeHeader(name: user?.fullName ?? 'bạn', userId: user?.id),
               const SizedBox(height: 18),
               TextField(
                 controller: _searchController,
@@ -207,9 +211,10 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 class _HomeHeader extends StatelessWidget {
-  const _HomeHeader({required this.name});
+  const _HomeHeader({required this.name, required this.userId});
 
   final String name;
+  final String? userId;
 
   @override
   Widget build(BuildContext context) {
@@ -241,17 +246,126 @@ class _HomeHeader extends StatelessWidget {
             ],
           ),
         ),
-        Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: AppColors.border),
-          ),
-          child: const Icon(Icons.notifications_none_rounded),
-        ),
+        _NotificationBell(userId: userId),
       ],
+    );
+  }
+}
+
+class _NotificationBell extends StatefulWidget {
+  const _NotificationBell({required this.userId});
+
+  final String? userId;
+
+  @override
+  State<_NotificationBell> createState() => _NotificationBellState();
+}
+
+class _NotificationBellState extends State<_NotificationBell>
+    with WidgetsBindingObserver {
+  final _repository = const NotificationRepository();
+  Timer? _refreshTimer;
+  int _unreadCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _loadUnreadCount();
+    _refreshTimer = Timer.periodic(
+      const Duration(seconds: 20),
+      (_) => _loadUnreadCount(),
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant _NotificationBell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.userId != widget.userId) _loadUnreadCount();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _loadUnreadCount();
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  Future<void> _loadUnreadCount() async {
+    final userId = widget.userId;
+    if (userId == null) {
+      if (mounted) setState(() => _unreadCount = 0);
+      return;
+    }
+    try {
+      final count = await _repository.fetchUnreadCount(userId);
+      if (mounted && userId == widget.userId) {
+        setState(() => _unreadCount = count);
+      }
+    } catch (_) {
+      // The menu remains available even if the database is temporarily down.
+    }
+  }
+
+  Future<void> _openNotifications() async {
+    if (widget.userId == null) return;
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const NotificationsScreen()));
+    await _loadUnreadCount();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          IconButton(
+            tooltip: 'Thông báo',
+            onPressed: _openNotifications,
+            icon: Icon(
+              _unreadCount > 0
+                  ? Icons.notifications_rounded
+                  : Icons.notifications_none_rounded,
+            ),
+          ),
+          if (_unreadCount > 0)
+            Positioned(
+              top: 5,
+              right: 5,
+              child: Container(
+                constraints: const BoxConstraints(minWidth: 17, minHeight: 17),
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                alignment: Alignment.center,
+                decoration: const BoxDecoration(
+                  color: Colors.red,
+                  shape: BoxShape.circle,
+                ),
+                child: Text(
+                  _unreadCount > 9 ? '9+' : '$_unreadCount',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
