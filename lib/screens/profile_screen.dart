@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import '../providers/auth_provider.dart';
 import '../utils/app_colors.dart';
 import 'about_screen.dart';
+import 'change_password_screen.dart';
+import 'edit_profile_screen.dart';
 import 'login_screen.dart';
+import 'my_orders_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -14,6 +17,22 @@ class ProfileScreen extends StatelessWidget {
       MaterialPageRoute(builder: (_) => const LoginScreen()),
       (route) => false,
     );
+  }
+
+  void _openProfileEditor(BuildContext context) {
+    final user = AuthScope.of(context).user;
+    if (user == null) return;
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => EditProfileScreen(user: user)));
+  }
+
+  void _openPasswordChange(BuildContext context) {
+    final user = AuthScope.of(context).user;
+    if (user == null) return;
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => ChangePasswordScreen(user: user)));
   }
 
   @override
@@ -38,10 +57,22 @@ class ProfileScreen extends StatelessWidget {
           _TileGroup(
             children: [
               _ProfileTile(
+                icon: Icons.manage_accounts_rounded,
+                title: 'Thông tin cá nhân',
+                subtitle: 'Tên, số điện thoại và email',
+                onTap: () => _openProfileEditor(context),
+              ),
+              _ProfileTile(
                 icon: Icons.history_rounded,
                 title: 'Lịch sử đơn hàng',
                 subtitle: 'Theo dõi các đơn đã đặt',
-                onTap: () {},
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const MyOrdersScreen(isActive: true),
+                    ),
+                  );
+                },
               ),
               _ProfileTile(
                 icon: Icons.location_on_outlined,
@@ -49,13 +80,7 @@ class ProfileScreen extends StatelessWidget {
                 subtitle: user?.displayAddress?.isNotEmpty == true
                     ? user!.displayAddress!
                     : 'Chưa lưu địa chỉ',
-                onTap: () {},
-              ),
-              _ProfileTile(
-                icon: Icons.local_offer_outlined,
-                title: 'Ưu đãi của bạn',
-                subtitle: 'Mã giảm giá và chương trình thành viên',
-                onTap: () {},
+                onTap: () => _openProfileEditor(context),
               ),
             ],
           ),
@@ -67,8 +92,8 @@ class ProfileScreen extends StatelessWidget {
               _ProfileTile(
                 icon: Icons.security_rounded,
                 title: 'Bảo mật tài khoản',
-                subtitle: 'Mật khẩu được lưu bằng SHA-256 trong PostgreSQL',
-                onTap: () {},
+                subtitle: 'Đổi mật khẩu để bảo vệ tài khoản',
+                onTap: () => _openPasswordChange(context),
               ),
               _ProfileTile(
                 icon: Icons.info_outline_rounded,

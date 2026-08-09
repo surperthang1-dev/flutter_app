@@ -13,6 +13,14 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Replaces the in-memory session after the customer updates their profile.
+  /// Keeping this in one place prevents checkout and the account header from
+  /// showing stale contact or delivery information.
+  void updateUser(AuthUser user) {
+    _user = user;
+    notifyListeners();
+  }
+
   void signOut() {
     _user = null;
     notifyListeners();

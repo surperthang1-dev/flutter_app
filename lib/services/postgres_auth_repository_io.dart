@@ -181,6 +181,140 @@ class PostgresAuthRepository {
     }
   }
 
+  /// Updates the information used for delivery and contact. Changing a phone
+  /// number is a sensitive operation, so the current password is required for
+  /// that specific change.
+  Future<AuthUser> updateProfile({
+    required AuthUser user,
+    required String fullName,
+    required String phone,
+    String? email,
+    required String addressDetail,
+    required String addressNote,
+    required String deliveryAreaId,
+    String currentPassword = '',
+  }) async {
+    final normalizedPhone = phone.trim();
+    final requiresPassword = normalizedPhone != user.phone;
+    if (requiresPassword && currentPassword.isEmpty) {
+      throw const AuthException(
+        'Vui lòng nhập mật khẩu hiện tại để đổi số điện thoại.',
+      );
+    }
+
+    final connection = await _open();
+    try {
+      final rows = await connection.execute(
+        Sql.named('''
+          WITH updated AS (
+            UPDATE app_users AS users
+            SET
+              full_name = @fullName,
+              phone = @phone,
+              email = NULLIF(@email, ''),
+              address = NULLIF(@addressDetail, ''),
+              address_detail = NULLIF(@addressDetail, ''),
+              address_note = NULLIF(@addressNote, ''),
+              delivery_area_id = @deliveryAreaId,
+              updated_at = NOW()
+            WHERE users.id = @userId
+              AND users.is_active = TRUE
+              AND (
+                @requiresPassword = FALSE
+                OR users.password_hash = encode(
+                  digest(@currentPassword, 'sha256'),
+                  'hex'
+                )
+              )
+            RETURNING users.*
+          )
+          SELECT
+            updated.id,
+            updated.full_name,
+            updated.phone,
+            updated.email,
+            updated.role,
+            updated.is_active,
+            updated.address,
+            updated.address_detail,
+            updated.address_note,
+            updated.delivery_area_id,
+            updated.created_at,
+            updated.updated_at,
+            areas.name AS delivery_area_name
+          FROM updated
+          LEFT JOIN delivery_areas areas ON areas.id = updated.delivery_area_id
+        '''),
+        parameters: {
+          'userId': user.id,
+          'fullName': fullName.trim(),
+          'phone': normalizedPhone,
+          'email': email?.trim() ?? '',
+          'addressDetail': addressDetail.trim(),
+          'addressNote': addressNote.trim(),
+          'deliveryAreaId': deliveryAreaId,
+          'requiresPassword': requiresPassword,
+          'currentPassword': currentPassword,
+        },
+      );
+
+      if (rows.isEmpty) {
+        throw AuthException(
+          requiresPassword
+              ? 'Mật khẩu hiện tại không đúng hoặc tài khoản đã bị khóa.'
+              : 'Không thể cập nhật tài khoản. Vui lòng đăng nhập lại.',
+        );
+      }
+
+      return AuthUser.fromColumnMap(rows.first.toColumnMap());
+    } on UniqueViolationException {
+      throw const AuthException('Số điện thoại hoặc email đã được sử dụng.');
+    } finally {
+      await connection.close();
+    }
+  }
+
+  Future<void> changePassword({
+    required AuthUser user,
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    if (currentPassword.isEmpty) {
+      throw const AuthException('Vui lòng nhập mật khẩu hiện tại.');
+    }
+    if (currentPassword == newPassword) {
+      throw const AuthException('Mật khẩu mới cần khác mật khẩu hiện tại.');
+    }
+
+    final connection = await _open();
+    try {
+      final rows = await connection.execute(
+        Sql.named('''
+          UPDATE app_users
+          SET
+            password_hash = encode(digest(@newPassword, 'sha256'), 'hex'),
+            updated_at = NOW()
+          WHERE id = @userId
+            AND is_active = TRUE
+            AND password_hash = encode(digest(@currentPassword, 'sha256'), 'hex')
+          RETURNING id
+        '''),
+        parameters: {
+          'userId': user.id,
+          'currentPassword': currentPassword,
+          'newPassword': newPassword,
+        },
+      );
+      if (rows.isEmpty) {
+        throw const AuthException(
+          'Mật khẩu hiện tại không đúng hoặc tài khoản đã bị khóa.',
+        );
+      }
+    } finally {
+      await connection.close();
+    }
+  }
+
   Future<Connection> _open() {
     return Connection.open(
       Endpoint(
