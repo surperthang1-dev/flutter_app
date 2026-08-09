@@ -58,6 +58,48 @@ class DeliveryAreaRepository {
     }
   }
 
+  Future<DeliveryArea> createArea({
+    required String name,
+    required int shippingFee,
+    bool isActive = true,
+  }) async {
+    final normalizedName = name.trim();
+    if (normalizedName.isEmpty) {
+      throw const DeliveryAreaException(
+        'Tên khu vực giao hàng không được để trống.',
+      );
+    }
+    if (shippingFee < 0) {
+      throw const DeliveryAreaException('Phí giao hàng không thể là số âm.');
+    }
+
+    final connection = await _open();
+    try {
+      final rows = await connection.execute(
+        Sql.named('''
+          INSERT INTO delivery_areas (id, name, shipping_fee, is_active)
+          VALUES (
+            'area-' || gen_random_uuid()::TEXT,
+            @name,
+            @shippingFee,
+            @isActive
+          )
+          RETURNING id, name, shipping_fee, is_active, created_at, updated_at
+        '''),
+        parameters: {
+          'name': normalizedName,
+          'shippingFee': shippingFee,
+          'isActive': isActive,
+        },
+      );
+      return DeliveryArea.fromColumnMap(rows.first.toColumnMap());
+    } on UniqueViolationException {
+      throw const DeliveryAreaException('Khu vực giao hàng này đã tồn tại.');
+    } finally {
+      await connection.close();
+    }
+  }
+
   Future<Connection> _open() {
     return Connection.open(
       Endpoint(

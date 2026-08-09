@@ -18,6 +18,14 @@ class DeliveryAreaRepository {
     throw _webError();
   }
 
+  Future<DeliveryArea> createArea({
+    required String name,
+    required int shippingFee,
+    bool isActive = true,
+  }) {
+    throw _webError();
+  }
+
   UnsupportedError _webError() {
     return UnsupportedError(
       'Bản web không thể kết nối PostgreSQL trực tiếp. Hãy chạy app Windows/native.',

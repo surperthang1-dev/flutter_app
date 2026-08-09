@@ -63,11 +63,36 @@ class _AdminDeliveryAreasScreenState extends State<AdminDeliveryAreasScreen> {
     }
   }
 
+  Future<void> _create() async {
+    final created = await showModalBottomSheet<DeliveryArea>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _CreateDeliveryAreaSheet(repository: _repository),
+    );
+    if (created != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Đã thêm khu vực ${created.name}.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      _refresh();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('Khu vực & phí giao hàng')),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _create,
+        backgroundColor: AppColors.coffee,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add_location_alt_rounded),
+        label: const Text('Thêm khu vực'),
+      ),
       body: FutureBuilder<List<DeliveryArea>>(
         future: _future,
         builder: (context, snapshot) {
@@ -87,7 +112,7 @@ class _AdminDeliveryAreasScreenState extends State<AdminDeliveryAreasScreen> {
           return RefreshIndicator(
             onRefresh: _refresh,
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(18, 12, 18, 28),
+              padding: const EdgeInsets.fromLTRB(18, 12, 18, 28 + 76),
               children: [
                 const Text(
                   'Thay đổi phí chỉ áp dụng cho đơn hàng tạo sau khi lưu. Đơn cũ giữ nguyên snapshot phí giao hàng.',
@@ -203,6 +228,145 @@ class _DeliveryAreaEditor extends StatefulWidget {
 
   @override
   State<_DeliveryAreaEditor> createState() => _DeliveryAreaEditorState();
+}
+
+class _CreateDeliveryAreaSheet extends StatefulWidget {
+  const _CreateDeliveryAreaSheet({required this.repository});
+
+  final DeliveryAreaRepository repository;
+
+  @override
+  State<_CreateDeliveryAreaSheet> createState() =>
+      _CreateDeliveryAreaSheetState();
+}
+
+class _CreateDeliveryAreaSheetState extends State<_CreateDeliveryAreaSheet> {
+  final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _feeController = TextEditingController();
+  bool _isActive = true;
+  bool _isSaving = false;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _feeController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (!(_formKey.currentState?.validate() ?? false) || _isSaving) return;
+    setState(() => _isSaving = true);
+    try {
+      final area = await widget.repository.createArea(
+        name: _nameController.text,
+        shippingFee: int.parse(_feeController.text),
+        isActive: _isActive,
+      );
+      if (mounted) Navigator.of(context).pop(area);
+    } on DeliveryAreaException catch (error) {
+      _showError(error.message);
+    } catch (_) {
+      _showError('Không thể thêm khu vực. Vui lòng thử lại.');
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  void _showError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+        decoration: const BoxDecoration(
+          color: AppColors.background,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Thêm khu vực giao hàng',
+                  style: TextStyle(
+                    color: AppColors.textDark,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Khu vực đang phục vụ sẽ tự xuất hiện trong form đăng ký và cập nhật địa chỉ của user.',
+                  style: TextStyle(color: AppColors.textMuted, height: 1.35),
+                ),
+                const SizedBox(height: 18),
+                TextFormField(
+                  controller: _nameController,
+                  autofocus: true,
+                  textInputAction: TextInputAction.next,
+                  decoration: const InputDecoration(
+                    labelText: 'Tên khu vực',
+                    hintText: 'Ví dụ: Quận 10',
+                    prefixIcon: Icon(Icons.location_on_rounded),
+                  ),
+                  validator: (value) {
+                    if ((value?.trim() ?? '').isEmpty) {
+                      return 'Vui lòng nhập tên khu vực.';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 14),
+                TextFormField(
+                  controller: _feeController,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  decoration: const InputDecoration(
+                    labelText: 'Phí giao hàng (đ)',
+                    prefixIcon: Icon(Icons.payments_outlined),
+                  ),
+                  validator: (value) {
+                    final fee = int.tryParse((value ?? '').trim());
+                    if (fee == null || fee < 0) {
+                      return 'Nhập phí giao hàng từ 0 trở lên.';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 8),
+                SwitchListTile.adaptive(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Bắt đầu phục vụ ngay'),
+                  subtitle: const Text(
+                    'Nếu tắt, khu vực được lưu nhưng chưa hiển thị cho user.',
+                  ),
+                  value: _isActive,
+                  onChanged: (value) => setState(() => _isActive = value),
+                ),
+                const SizedBox(height: 14),
+                PrimaryButton(
+                  label: _isSaving ? 'Đang thêm...' : 'Thêm khu vực',
+                  icon: Icons.add_location_alt_rounded,
+                  onPressed: _isSaving ? null : _save,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _DeliveryAreaEditorState extends State<_DeliveryAreaEditor> {
