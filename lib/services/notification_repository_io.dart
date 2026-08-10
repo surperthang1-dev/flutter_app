@@ -9,6 +9,7 @@ class NotificationRepository {
   final DatabaseConfig config;
 
   Future<List<UserNotification>> fetchNotifications(String userId) async {
+    // Danh sách thông báo được giới hạn 80 bản ghi gần nhất của chính user đó.
     final connection = await _open();
     try {
       final rows = await connection.execute(
@@ -30,6 +31,7 @@ class NotificationRepository {
   }
 
   Future<int> fetchUnreadCount(String userId) async {
+    // Badge chuông chỉ cần số lượng nên dùng truy vấn COUNT nhẹ.
     final connection = await _open();
     try {
       final rows = await connection.execute(
@@ -48,6 +50,7 @@ class NotificationRepository {
   }
 
   Future<void> markRead({required String userId, required int id}) async {
+    // Scope user_id ngăn người khác đánh dấu đọc thông báo không thuộc về họ.
     final connection = await _open();
     try {
       await connection.execute(
@@ -65,6 +68,7 @@ class NotificationRepository {
   }
 
   Future<void> markAllRead(String userId) async {
+    // Hành động 'Đọc tất cả' chỉ đổi các bản ghi chưa đọc của user hiện tại.
     final connection = await _open();
     try {
       await connection.execute(

@@ -21,6 +21,7 @@ class PostgresAuthRepository {
     required String phone,
     required String password,
   }) async {
+    // So sánh SHA-256 trong PostgreSQL và từ chối tài khoản đã bị admin khóa.
     final connection = await _open();
 
     try {
@@ -75,6 +76,7 @@ class PostgresAuthRepository {
     required String deliveryAreaId,
     String? addressNote,
   }) async {
+    // Đăng ký chỉ chấp nhận khu vực giao hàng hiện đang phục vụ.
     final connection = await _open();
 
     try {
@@ -157,6 +159,7 @@ class PostgresAuthRepository {
     required String phone,
     required String newPassword,
   }) async {
+    // Luồng quên mật khẩu đơn giản của ứng dụng local, cập nhật hash trong DB.
     final connection = await _open();
 
     try {
@@ -279,6 +282,7 @@ class PostgresAuthRepository {
     required String currentPassword,
     required String newPassword,
   }) async {
+    // Cần mật khẩu cũ để tránh thay đổi mật khẩu khi phiên đăng nhập bị lộ.
     if (currentPassword.isEmpty) {
       throw const AuthException('Vui lòng nhập mật khẩu hiện tại.');
     }

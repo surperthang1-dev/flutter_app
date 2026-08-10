@@ -10,6 +10,7 @@ class PostgresProductRepository {
   final DatabaseConfig config;
 
   Future<List<Product>> fetchProducts() async {
+    // User chỉ xem món và danh mục đang hoạt động; admin vẫn quản lý toàn bộ ở repository khác.
     final connection = await Connection.open(
       Endpoint(
         host: config.host,

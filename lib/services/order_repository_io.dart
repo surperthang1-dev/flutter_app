@@ -16,6 +16,7 @@ class OrderRepository {
   final DatabaseConfig config;
 
   Future<CheckoutSnapshot> fetchCheckoutSnapshot(AuthUser user) async {
+    // Lấy địa chỉ/khu vực hiện tại từ DB trước khi tính phí giao đơn mới.
     final connection = await _open();
     try {
       return await _fetchCheckoutSnapshot(connection, user.id);
@@ -31,6 +32,7 @@ class OrderRepository {
     String? discountCodeId,
     String? note,
   }) async {
+    // Tất cả bước tạo đơn chạy trong một transaction để snapshot không bị lệch.
     final connection = await _open();
     try {
       return await connection.runTx((session) async {
@@ -47,6 +49,7 @@ class OrderRepository {
         );
         final orderId = 'CFV-${DateTime.now().microsecondsSinceEpoch}';
 
+        // Orders lưu snapshot khách hàng, phí và tổng tiền tại thời điểm đặt.
         await session.execute(
           Sql.named('''
             INSERT INTO orders (
@@ -101,6 +104,7 @@ class OrderRepository {
         );
 
         for (final item in draft.items) {
+          // Mỗi dòng món cũng lưu snapshot tên/giá/tùy chọn để lịch sử không đổi.
           await session.execute(
             Sql.named('''
               INSERT INTO order_items (
@@ -162,6 +166,7 @@ class OrderRepository {
   }
 
   Future<List<AdminOrder>> fetchOrdersForUser(String userId) async {
+    // User chỉ nhận được danh sách đơn mang user_id của chính họ.
     final connection = await _open();
     try {
       return await _fetchOrders(
@@ -207,6 +212,7 @@ class OrderRepository {
     required OrderStatus nextStatus,
     String? cancelReason,
   }) async {
+    // Admin đổi trạng thái trong transaction; trigger DB tạo notification tương ứng.
     final connection = await _open();
     try {
       await connection.runTx((session) async {
@@ -306,6 +312,7 @@ class OrderRepository {
     Session session,
     String userId,
   ) async {
+    // Không cho đặt đơn nếu hồ sơ giao hàng thiếu địa chỉ, ghi chú hoặc khu vực.
     final rows = await session.execute(
       Sql.named('''
         SELECT

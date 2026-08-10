@@ -20,6 +20,7 @@ class EditProfileScreen extends StatefulWidget {
 }
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
+  // Form hồ sơ dùng lại validator đăng ký để dữ liệu user luôn hợp lệ với trigger DB.
   final _formKey = GlobalKey<FormState>();
   final _repository = const PostgresAuthRepository();
   final _areaRepository = const DeliveryAreaRepository();
@@ -68,6 +69,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   Future<void> _loadAreas() async {
+    // Chỉ tải khu vực active để user không thể chọn nơi quán đang tạm ngừng phục vụ.
     setState(() {
       _isLoadingAreas = true;
       _areaLoadError = null;
@@ -92,6 +94,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   Future<void> _save() async {
+    // Đổi số điện thoại sẽ yêu cầu mật khẩu hiện tại ở repository và PostgreSQL.
     if (!(_formKey.currentState?.validate() ?? false)) return;
     if (_isLoadingAreas || _areas.isEmpty) {
       _showMessage('Chưa tải được khu vực giao hàng. Vui lòng thử lại.');

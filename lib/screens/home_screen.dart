@@ -23,6 +23,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  // Menu lấy sản phẩm và danh mục từ PostgreSQL; mock chỉ là phương án dự phòng.
   final _productRepository = const PostgresProductRepository();
   final _categoryRepository = const CategoryRepository();
   final _searchController = TextEditingController();
@@ -73,6 +74,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _loadProductsFromDatabase() async {
+    // Tải song song để danh mục và món luôn phản ánh dữ liệu admin mới nhất.
     try {
       final result = await Future.wait<Object>([
         _productRepository.fetchProducts(),
@@ -297,6 +299,7 @@ class _NotificationBellState extends State<_NotificationBell>
   }
 
   Future<void> _loadUnreadCount() async {
+    // Badge chỉ hiển thị tổng thông báo chưa đọc của đúng tài khoản đang đăng nhập.
     final userId = widget.userId;
     if (userId == null) {
       if (mounted) setState(() => _unreadCount = 0);
@@ -313,6 +316,7 @@ class _NotificationBellState extends State<_NotificationBell>
   }
 
   Future<void> _openNotifications() async {
+    // Sau khi quay về từ danh sách thông báo, đọc lại badge ngay lập tức.
     if (widget.userId == null) return;
     await Navigator.of(
       context,

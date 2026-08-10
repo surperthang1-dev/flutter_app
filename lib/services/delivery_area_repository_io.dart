@@ -9,6 +9,7 @@ class DeliveryAreaRepository {
   final DatabaseConfig config;
 
   Future<List<DeliveryArea>> fetchAreas({bool includeInactive = false}) async {
+    // Mặc định chỉ trả khu vực phục vụ cho user; admin truyền true để xem toàn bộ.
     final connection = await _open();
     try {
       final rows = await connection.execute('''
@@ -30,6 +31,7 @@ class DeliveryAreaRepository {
     required int shippingFee,
     required bool isActive,
   }) async {
+    // Sửa phí/trạng thái chỉ tác động đơn tạo sau vì đơn cũ đã lưu snapshot phí.
     if (shippingFee < 0) {
       throw const DeliveryAreaException('Phí giao hàng không thể là số âm.');
     }
@@ -63,6 +65,7 @@ class DeliveryAreaRepository {
     required int shippingFee,
     bool isActive = true,
   }) async {
+    // ID UUID ẩn với user giúp tên khu vực có thể thay đổi mà liên kết vẫn ổn định.
     final normalizedName = name.trim();
     if (normalizedName.isEmpty) {
       throw const DeliveryAreaException(

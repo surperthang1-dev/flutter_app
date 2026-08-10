@@ -15,6 +15,7 @@ class NotificationsScreen extends StatefulWidget {
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
+  // NotificationRepository đọc các event đơn hàng đã được trigger PostgreSQL tạo sẵn.
   final _repository = const NotificationRepository();
   Future<List<UserNotification>>? _future;
   String? _userId;
@@ -50,6 +51,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Future<void> _openNotification(UserNotification notification) async {
+    // Đọc xong: notification giao thành công đi tới màn đánh giá; các loại khác mở tracking.
     final user = AuthScope.of(context).user;
     if (user == null) return;
     if (!notification.isRead) {

@@ -13,6 +13,7 @@ class AdminCategoriesPage extends StatefulWidget {
 }
 
 class _AdminCategoriesPageState extends State<AdminCategoriesPage> {
+  // Danh mục quyết định cách nhóm menu user; danh mục có món chỉ được tạm tắt, không xóa cứng.
   final _repository = const CategoryRepository();
   final _searchController = TextEditingController();
   late Future<List<ProductCategory>> _future;
@@ -68,6 +69,7 @@ class _AdminCategoriesPageState extends State<AdminCategoriesPage> {
   }
 
   Future<void> _delete(ProductCategory category) async {
+    // Khi đã có sản phẩm, UI chuyển sang lựa chọn deactivate để không làm hỏng liên kết DB.
     final hasProducts = category.productCount > 0;
     final action = await showDialog<_CategoryDeleteAction>(
       context: context,

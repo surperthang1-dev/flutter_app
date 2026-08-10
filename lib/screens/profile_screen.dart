@@ -12,6 +12,7 @@ class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
   void _logout(BuildContext context) {
+    // Hủy phiên trên memory và xóa toàn bộ history route về trang đăng nhập.
     AuthScope.of(context).signOut();
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginScreen()),
@@ -20,6 +21,7 @@ class ProfileScreen extends StatelessWidget {
   }
 
   void _openProfileEditor(BuildContext context) {
+    // Màn này quản lý tên, số điện thoại, email và địa chỉ giao hàng mặc định.
     final user = AuthScope.of(context).user;
     if (user == null) return;
     Navigator.of(
@@ -28,6 +30,7 @@ class ProfileScreen extends StatelessWidget {
   }
 
   void _openPasswordChange(BuildContext context) {
+    // Đổi mật khẩu yêu cầu xác nhận mật khẩu cũ trong màn chuyên biệt.
     final user = AuthScope.of(context).user;
     if (user == null) return;
     Navigator.of(

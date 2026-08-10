@@ -3,6 +3,7 @@ import '../models/order_status.dart';
 class OrderWorkflowService {
   const OrderWorkflowService();
 
+  // State machine đơn hàng: admin chỉ được chuyển sang trạng thái kế tiếp hợp lệ.
   static const _validTransitions = <OrderStatus, Set<OrderStatus>>{
     OrderStatus.pending: {OrderStatus.confirmed, OrderStatus.cancelled},
     OrderStatus.confirmed: {OrderStatus.preparing, OrderStatus.cancelled},
@@ -22,6 +23,7 @@ class OrderWorkflowService {
     required OrderStatus to,
     String? cancelReason,
   }) {
+    // Chặn user thường đổi trạng thái hoặc hủy đơn không có lý do.
     if (!actorIsAdmin) {
       throw const OrderWorkflowException(
         'Chỉ quản trị viên mới có thể cập nhật trạng thái đơn hàng.',

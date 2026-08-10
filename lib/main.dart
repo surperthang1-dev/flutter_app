@@ -6,6 +6,7 @@ import 'screens/splash_screen.dart';
 import 'utils/app_colors.dart';
 
 void main() {
+  // Cài hai state dùng chung cho toàn bộ app: phiên đăng nhập và giỏ hàng.
   runApp(
     AuthScope(
       notifier: AuthProvider(),
@@ -19,6 +20,7 @@ class CoffeeVietApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Theme dùng chung giúp tất cả màn hình giữ cùng nhận diện Coffee Việt 24H.
     final baseTextTheme = Theme.of(context).textTheme;
     final appTextTheme = baseTextTheme.copyWith(
       headlineLarge: baseTextTheme.headlineLarge?.copyWith(

@@ -4,6 +4,7 @@ import '../models/cart_item.dart';
 import '../models/product.dart';
 
 class CartProvider extends ChangeNotifier {
+  // Giỏ hàng chỉ tồn tại trong phiên chạy app; đơn chính thức được lưu khi checkout.
   final List<CartItem> _items = [];
 
   List<CartItem> get items => List.unmodifiable(_items);
@@ -20,6 +21,7 @@ class CartProvider extends ChangeNotifier {
     required String note,
     required int quantity,
   }) {
+    // Cùng món + cùng tuỳ chọn được gộp số lượng thay vì tạo dòng giỏ hàng mới.
     final newItem = CartItem(
       id: DateTime.now().microsecondsSinceEpoch.toString(),
       product: product,
@@ -46,6 +48,7 @@ class CartProvider extends ChangeNotifier {
   }
 
   void updateQuantity(String id, int quantity) {
+    // Đặt số lượng về 0 sẽ xóa món khỏi giỏ hàng.
     final index = _items.indexWhere((item) => item.id == id);
     if (index < 0) return;
 
@@ -64,12 +67,14 @@ class CartProvider extends ChangeNotifier {
   }
 
   void clear() {
+    // Chỉ gọi sau khi PostgreSQL đã tạo đơn hàng thành công.
     _items.clear();
     notifyListeners();
   }
 }
 
 class CartScope extends InheritedNotifier<CartProvider> {
+  // Cung cấp giỏ hàng cho Menu, Chi tiết món, Giỏ hàng và Checkout.
   const CartScope({
     super.key,
     required CartProvider super.notifier,

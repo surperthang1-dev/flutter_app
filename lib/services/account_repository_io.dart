@@ -9,6 +9,7 @@ class AccountRepository {
   final DatabaseConfig config;
 
   Future<List<AdminAccount>> fetchAccounts() async {
+    // Admin xem vai trò, trạng thái hoạt động, khu vực và số đơn của từng tài khoản.
     final connection = await _open();
     try {
       final rows = await connection.execute('''
@@ -42,6 +43,7 @@ class AccountRepository {
     required String accountId,
     required bool isActive,
   }) async {
+    // Bảo vệ: không tự khóa chính mình và không khóa admin active cuối cùng.
     if (actorId == accountId) {
       throw const AccountException(
         'Không thể khóa chính tài khoản đang đăng nhập.',

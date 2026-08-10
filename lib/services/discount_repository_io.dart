@@ -31,6 +31,7 @@ class DiscountRepository {
     required String code,
     required int subtotal,
   }) async {
+    // Kiểm tra mã tại UI để phản hồi nhanh; trigger orders kiểm tra lại khi tạo đơn.
     final connection = await _open();
     try {
       final rows = await connection.execute(
@@ -74,6 +75,7 @@ class DiscountRepository {
   }
 
   Future<void> saveDiscountCode(DiscountCode discount) async {
+    // Admin tạo/sửa mã giảm giá; unique index và trigger DB chặn mã trùng hoặc dữ liệu sai.
     final connection = await _open();
     try {
       await connection.execute(

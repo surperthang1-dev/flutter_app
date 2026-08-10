@@ -14,12 +14,14 @@ class MainShell extends StatefulWidget {
 }
 
 class _MainShellState extends State<MainShell> {
+  // IndexedStack giữ nguyên state của từng tab khi user chuyển thanh điều hướng.
   int _index = 0;
 
   @override
   Widget build(BuildContext context) {
     final cart = CartScope.of(context);
     final screens = [
+      // Tab 0..3 lần lượt là Menu, Giỏ hàng, Đơn hàng và Tài khoản.
       const HomeScreen(),
       const CartScreen(),
       MyOrdersScreen(isActive: _index == 2),

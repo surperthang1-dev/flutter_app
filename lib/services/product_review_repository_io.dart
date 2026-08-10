@@ -13,6 +13,7 @@ class ProductReviewRepository {
     required String productId,
     String? viewerUserId,
   }) async {
+    // Trả cùng lúc điểm trung bình, số lượt đánh giá và danh sách bình luận hiển thị.
     final connection = await _open();
     try {
       final summaryRows = await connection.execute(
@@ -72,6 +73,7 @@ class ProductReviewRepository {
     required int rating,
     required String comment,
   }) async {
+    // Một user chỉ có một review mỗi món; ON CONFLICT biến lần gửi sau thành cập nhật.
     final normalizedComment = comment.trim();
     if (rating < 1 || rating > 5) {
       throw const ProductReviewException('Vui lòng chọn từ 1 đến 5 sao.');
@@ -133,6 +135,7 @@ class ProductReviewRepository {
     required int reviewId,
     required AuthUser user,
   }) async {
+    // Điều kiện user_id bảo đảm người dùng không thể xóa đánh giá của người khác.
     final connection = await _open();
     try {
       final rows = await connection.execute(

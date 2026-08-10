@@ -18,6 +18,7 @@ import 'admin_order_detail_screen.dart';
 import 'login_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
+  // Điểm vào dành riêng cho role admin: quản lý menu, đơn, khách hàng, ưu đãi và thống kê.
   const AdminDashboardScreen({super.key});
 
   @override

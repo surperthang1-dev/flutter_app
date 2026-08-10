@@ -14,6 +14,7 @@ class AdminDiscountsPage extends StatefulWidget {
 }
 
 class _AdminDiscountsPageState extends State<AdminDiscountsPage> {
+  // Quản lý toàn bộ vòng đời mã giảm giá: tạo, sửa, bật/tắt và lọc theo hiệu lực.
   final _repository = const DiscountRepository();
   final _searchController = TextEditingController();
   late Future<List<DiscountCode>> _future;
@@ -44,6 +45,7 @@ class _AdminDiscountsPageState extends State<AdminDiscountsPage> {
   }
 
   Future<void> _openEditor([DiscountCode? discount]) async {
+    // Cùng một editor được dùng cho cả tạo mới và chỉnh sửa mã giảm giá.
     final saved = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,

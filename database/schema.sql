@@ -1,3 +1,4 @@
+-- DANH MỤC DỮ LIỆU GỐC: menu sản phẩm hiển thị cho user.
 CREATE TABLE IF NOT EXISTS products (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -126,6 +127,7 @@ ON CONFLICT (id) DO UPDATE SET
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
+-- TÀI KHOẢN: lưu thông tin đăng nhập, vai trò và hồ sơ giao hàng.
 CREATE TABLE IF NOT EXISTS app_users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   full_name TEXT NOT NULL,
@@ -171,6 +173,7 @@ ON CONFLICT (phone) DO UPDATE SET
   password_hash = EXCLUDED.password_hash,
   updated_at = NOW();
 
+-- ĐƠN HÀNG: snapshot khách hàng, phí ship, giảm giá và trạng thái tại lúc đặt.
 CREATE TABLE IF NOT EXISTS orders (
   id TEXT PRIMARY KEY,
   user_id UUID REFERENCES app_users(id) ON DELETE SET NULL,
@@ -187,6 +190,7 @@ CREATE TABLE IF NOT EXISTS orders (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- CHI TIẾT ĐƠN: snapshot món/giá/tùy chọn để dữ liệu cũ không đổi theo menu mới.
 CREATE TABLE IF NOT EXISTS order_items (
   id BIGSERIAL PRIMARY KEY,
   order_id TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
@@ -209,6 +213,7 @@ CREATE INDEX IF NOT EXISTS order_items_order_id_idx ON order_items (order_id);
 -- Delivery areas are managed data. IDs are stable and are never derived from
 -- the display name, so existing orders remain valid when an admin renames an
 -- area or changes its fee.
+-- KHU VỰC GIAO: admin quản lý phí và trạng thái; user chỉ chọn khu vực active.
 CREATE TABLE IF NOT EXISTS delivery_areas (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -330,6 +335,7 @@ WHERE NULLIF(BTRIM(COALESCE(address_note, '')), '') IS NULL;
 ALTER TABLE app_users
   ALTER COLUMN address_note SET NOT NULL;
 
+-- NHÓM TRIGGER CỐT LÕI: chuẩn hóa dữ liệu và bảo vệ các quy tắc nghiệp vụ.
 CREATE OR REPLACE FUNCTION coffee_touch_updated_at()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -671,7 +677,7 @@ AFTER INSERT OR UPDATE OR DELETE ON order_items
 DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW EXECUTE FUNCTION coffee_validate_order_totals();
 
--- Schema version 2: categories, discount snapshots and account activation.
+-- MIGRATION V2: danh mục, mã giảm giá, snapshot giảm giá và khóa/mở tài khoản.
 CREATE TABLE IF NOT EXISTS schema_migrations (
   version INTEGER PRIMARY KEY,
   name TEXT NOT NULL,
@@ -1158,7 +1164,7 @@ INSERT INTO schema_migrations (version, name)
 VALUES (2, 'categories discounts and account activation')
 ON CONFLICT (version) DO NOTHING;
 
--- Schema version 3: customer self-service profile updates and product reviews.
+-- MIGRATION V3: user tự cập nhật hồ sơ và gửi đánh giá/bình luận sản phẩm.
 -- A customer can keep one current review per product. Updating that review
 -- preserves its identity while refreshing the content and timestamp.
 CREATE TABLE IF NOT EXISTS product_reviews (
@@ -1250,7 +1256,7 @@ INSERT INTO schema_migrations (version, name)
 VALUES (3, 'customer profile and product reviews')
 ON CONFLICT (version) DO NOTHING;
 
--- Schema version 4: admins may add delivery areas without creating duplicates.
+-- MIGRATION V4: admin thêm khu vực giao hàng, chống trùng tên không phân biệt hoa thường.
 CREATE UNIQUE INDEX IF NOT EXISTS delivery_areas_name_lower_key
   ON delivery_areas (LOWER(BTRIM(name)));
 
@@ -1258,7 +1264,7 @@ INSERT INTO schema_migrations (version, name)
 VALUES (4, 'delivery area creation')
 ON CONFLICT (version) DO NOTHING;
 
--- Schema version 5: persistent in-app order notifications for customers.
+-- MIGRATION V5: thông báo in-app bền vững khi đặt đơn, bắt đầu giao và giao thành công.
 CREATE TABLE IF NOT EXISTS user_notifications (
   id BIGSERIAL PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,

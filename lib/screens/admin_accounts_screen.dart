@@ -17,6 +17,7 @@ class AdminAccountsPage extends StatefulWidget {
 }
 
 class _AdminAccountsPageState extends State<AdminAccountsPage> {
+  // Admin có thể tìm/lọc tài khoản và khóa mở tài khoản theo đúng role hiện tại.
   final _repository = const AccountRepository();
   final _searchController = TextEditingController();
   late Future<List<AdminAccount>> _future;
@@ -48,6 +49,7 @@ class _AdminAccountsPageState extends State<AdminAccountsPage> {
   }
 
   Future<void> _changeActivity(AdminAccount account, bool isActive) async {
+    // Kiểm tra role ở UI trước, repository và trigger DB tiếp tục bảo vệ ở tầng dữ liệu.
     final actor = AuthScope.of(context).user;
     if (actor == null || !actor.isAdmin) {
       _message('Bạn không có quyền quản lý tài khoản.');

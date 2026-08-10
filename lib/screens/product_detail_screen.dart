@@ -22,6 +22,7 @@ class ProductDetailScreen extends StatefulWidget {
 }
 
 class _ProductDetailScreenState extends State<ProductDetailScreen> {
+  // State cấu hình món (size/đường/đá) và state review được tách trên cùng màn chi tiết.
   final _noteController = TextEditingController();
   final _reviewRepository = const ProductReviewRepository();
   String _size = 'M';
@@ -32,6 +33,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   String? _reviewViewerId;
 
   int get _unitPrice {
+    // Giá size được tính ở UI để user thấy tổng tạm tính trước khi thêm giỏ.
     final extra = switch (_size) {
       'M' => 5000,
       'L' => 10000,
@@ -71,6 +73,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   Future<void> _openReviewComposer(ProductReview? existingReview) async {
+    // Bottom sheet cho phép tạo mới hoặc cập nhật review duy nhất của user cho món này.
     final user = AuthScope.of(context).user;
     if (user == null) return;
     final controller = TextEditingController(
@@ -240,6 +243,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   void _addToCart() {
+    // CartProvider tự gộp các món có cùng tùy chọn thay vì trùng nhiều dòng.
     CartScope.of(context).addProduct(
       product: widget.product,
       size: _size,
@@ -695,3 +699,5 @@ class _StarRow extends StatelessWidget {
     );
   }
 }
+
+// Tải lại review khi đổi user để đánh dấu chính xác 'đánh giá của bạn'.

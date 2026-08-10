@@ -1,0 +1,214 @@
+BÁO CÁO TỔNG HỢP ỨNG DỤNG COFFEE VIỆT 24H
+=============================================
+
+1. THÔNG TIN DỰ ÁN
+------------------
+- Tên ứng dụng: Coffee Việt 24H.
+- Loại ứng dụng: Ứng dụng đặt đồ uống/đồ ăn, có hai vai trò User và Admin.
+- Công nghệ giao diện: Flutter, Material 3.
+- Cơ sở dữ liệu: PostgreSQL local (database: coffee_viet_24h).
+- Kiến trúc: Flutter UI -> Provider state -> Repository -> PostgreSQL.
+- Nhánh Git đang phát triển: test1.
+
+2. MỤC TIÊU HỆ THỐNG
+--------------------
+Ứng dụng hỗ trợ khách hàng xem menu, chọn món, đặt hàng, theo dõi trạng thái,
+nhận thông báo và đánh giá sản phẩm. Quản trị viên quản lý sản phẩm, danh mục,
+khu vực giao hàng, mã giảm giá, tài khoản, đơn hàng, doanh thu và hóa đơn.
+
+3. KIẾN TRÚC PHẦN MỀM
+---------------------
+3.1. Tầng giao diện (lib/screens và lib/widgets)
+- Các màn hình Flutter hiển thị nghiệp vụ cho User/Admin.
+- Widget dùng lại: ProductVisual, ProductImage, ProductCard, PrimaryButton,
+  QuantityStepper, OrderTimeline, OptionChipSelector, CoffeeLogo.
+
+3.2. Tầng state (lib/providers)
+- AuthProvider: giữ thông tin user đang đăng nhập và kiểm tra quyền admin.
+- CartProvider: giữ giỏ hàng trong phiên chạy; tự gộp các món có cùng tùy chọn.
+- AuthScope và CartScope: cung cấp state cho toàn bộ widget tree.
+
+3.3. Tầng dữ liệu (lib/services)
+- Repository kết nối PostgreSQL qua package postgres.
+- File *_io.dart dùng cho Windows/native.
+- File *_web.dart hiển thị lỗi rõ ràng vì bản web không được kết nối PostgreSQL
+  trực tiếp trong kiến trúc hiện tại.
+
+3.4. Tầng cơ sở dữ liệu (database)
+- schema.sql: schema đầy đủ cho lần cài đặt mới.
+- database/migrations: migration tăng dần cho database đang sử dụng.
+- Trigger PostgreSQL đảm bảo quy tắc nghiệp vụ vẫn đúng dù dữ liệu được thao tác
+  từ giao diện hay DataGrip.
+
+4. CHỨC NĂNG DÀNH CHO USER
+--------------------------
+4.1. Xác thực và hồ sơ
+- Đăng ký với họ tên, số điện thoại, email tùy chọn, địa chỉ, khu vực giao hàng,
+  ghi chú địa chỉ và mật khẩu.
+- Đăng nhập bằng số điện thoại và mật khẩu.
+- Quên mật khẩu/đặt lại mật khẩu.
+- Cập nhật tên, email, địa chỉ, ghi chú, khu vực giao hàng.
+- Đổi số điện thoại yêu cầu xác nhận mật khẩu hiện tại.
+- Đổi mật khẩu yêu cầu mật khẩu cũ và xác nhận mật khẩu mới.
+- Tài khoản bị admin khóa sẽ không thể đăng nhập.
+
+4.2. Menu và giỏ hàng
+- Xem danh mục và menu đang hoạt động từ PostgreSQL.
+- Tìm kiếm theo tên, mô tả hoặc danh mục.
+- Hiển thị ảnh thật của sản phẩm khi có image_asset; dùng icon dự phòng khi chưa có ảnh.
+- Xem chi tiết món, chọn size, lượng đường, lượng đá, ghi chú và số lượng.
+- Thêm nhanh từ menu hoặc thêm từ màn chi tiết.
+- Giỏ hàng hiển thị ảnh, tùy chọn, ghi chú, số lượng và tổng giá.
+- Cùng sản phẩm/cùng tùy chọn sẽ được gộp thành một dòng giỏ hàng.
+
+4.3. Checkout và đơn hàng
+- Hiển thị snapshot thông tin giao hàng từ hồ sơ user.
+- Hỗ trợ các phương thức: tiền mặt khi nhận hàng, chuyển khoản, MoMo/ZaloPay.
+- Áp mã giảm giá, tính tạm tính, phí giao, giảm giá và tổng thanh toán.
+- Không cho tạo đơn nếu khu vực giao hàng tạm ngừng hoặc hồ sơ giao hàng chưa hợp lệ.
+- Sau khi đặt thành công, giỏ hàng được xóa và user vào trang theo dõi đơn.
+- Xem đơn đang xử lý, đơn hoàn thành và đơn đã hủy.
+- Xem timeline trạng thái và snapshot đầy đủ từng món trong đơn.
+
+4.4. Thông báo đơn hàng
+- Chuông thông báo ở trang Menu hiển thị số thông báo chưa đọc.
+- Badge tự kiểm tra lại mỗi 20 giây và khi ứng dụng hoạt động lại.
+- Thông báo được lưu ở PostgreSQL nên không mất khi đóng ứng dụng.
+- Có ba mốc thông báo:
+  1) Đặt hàng thành công.
+  2) Đơn hàng bắt đầu giao.
+  3) Giao hàng thành công.
+- Chạm thông báo đặt hàng/đang giao để mở màn theo dõi đơn.
+- Chạm thông báo giao thành công để mở danh sách các món đã mua.
+- User có thể bấm vào món đã mua để xem chi tiết và đánh giá.
+- Có chức năng đánh dấu một thông báo hoặc đọc tất cả thông báo.
+
+4.5. Đánh giá sản phẩm
+- Xem điểm trung bình, số lượt đánh giá và danh sách bình luận.
+- User chọn từ 1 đến 5 sao và viết bình luận.
+- Mỗi user có một đánh giá cho mỗi sản phẩm; gửi lần sau sẽ cập nhật đánh giá cũ.
+- Bình luận từ 2 đến 600 ký tự.
+- Không cho đánh giá nếu tài khoản bị khóa hoặc sản phẩm không còn hoạt động.
+
+5. CHỨC NĂNG DÀNH CHO ADMIN
+---------------------------
+5.1. Dashboard
+- Trang tổng quan hiển thị số sản phẩm, user, admin, đơn hàng, doanh thu,
+  doanh thu hôm nay, giá trung bình và giá trị menu.
+
+5.2. Sản phẩm và danh mục
+- Thêm, sửa, xóa sản phẩm.
+- Nhập tên, mô tả, giá, danh mục, nhãn ảnh, màu và ảnh sản phẩm.
+- Danh mục có thể tạo, sửa, bật/tắt và xóa khi chưa có sản phẩm liên kết.
+- Danh mục đang có sản phẩm được tạm tắt thay vì xóa cứng để bảo toàn dữ liệu.
+
+5.3. Đơn hàng
+- Xem tất cả đơn và lọc theo trạng thái.
+- Cập nhật trạng thái theo state machine:
+  Chờ xác nhận -> Đã xác nhận -> Đang chuẩn bị -> Đang giao -> Hoàn thành.
+- Có thể hủy ở những bước hợp lệ, bắt buộc nhập lý do hủy.
+- Khi admin chuyển sang Đang giao hoặc Hoàn thành, trigger DB tự tạo thông báo cho user.
+- Xuất hóa đơn theo đơn hàng.
+
+5.4. Khu vực giao hàng
+- Xem toàn bộ khu vực, kể cả khu vực tạm ngừng.
+- Thêm khu vực mới với tên, phí giao và trạng thái phục vụ.
+- Sửa phí giao và bật/tắt khu vực.
+- Khu vực active tự xuất hiện trong đăng ký/cập nhật hồ sơ của user.
+- Khu vực inactive không cho user chọn khi tạo đơn mới.
+- Tên khu vực không được trùng, không phân biệt chữ hoa/chữ thường.
+
+5.5. Mã giảm giá
+- Tạo/sửa mã giảm theo tiền cố định hoặc phần trăm.
+- Thiết lập điều kiện tối thiểu, giảm tối đa, số lượt sử dụng, thời gian hiệu lực
+  và trạng thái bật/tắt.
+- Hệ thống kiểm tra lại mã giảm giá ở trigger PostgreSQL khi tạo đơn.
+
+5.6. Tài khoản
+- Xem danh sách tài khoản, role, trạng thái hoạt động, khu vực và số đơn.
+- Tìm kiếm/lọc tài khoản.
+- Khóa/mở khóa user.
+- Không thể khóa chính admin đang đăng nhập.
+- Không thể khóa quản trị viên active cuối cùng.
+
+6. THIẾT KẾ DATABASE POSTGRESQL
+-------------------------------
+Các bảng chính hiện có:
+1) products: sản phẩm/menu.
+2) categories: danh mục sản phẩm.
+3) app_users: tài khoản, role, hồ sơ giao hàng.
+4) delivery_areas: khu vực và phí giao.
+5) discount_codes: mã giảm giá.
+6) orders: snapshot đơn hàng.
+7) order_items: snapshot các món trong đơn.
+8) order_status_history: lịch sử đổi trạng thái.
+9) product_reviews: sao và bình luận sản phẩm.
+10) user_notifications: thông báo in-app của user.
+11) schema_migrations: lịch sử migration đã áp dụng.
+
+7. TRIGGER VÀ RÀNG BUỘC DATABASE
+--------------------------------
+- coffee_normalize_delivery_area: chuẩn hóa tên khu vực.
+- coffee_normalize_product: chuẩn hóa và kiểm tra thông tin sản phẩm.
+- coffee_validate_customer_profile: bắt buộc địa chỉ, ghi chú và khu vực cho user.
+- coffee_validate_account_credentials: kiểm tra định dạng số điện thoại/email.
+- coffee_guard_account_activity: bảo vệ admin cuối cùng.
+- coffee_guard_order: kiểm tra trạng thái, snapshot phí giao, snapshot giảm giá,
+  tổng tiền và quy tắc chuyển trạng thái.
+- coffee_guard_order_item: tính line_total và kiểm tra tùy chọn món.
+- coffee_validate_order_totals: bảo đảm tổng dòng món = subtotal, tổng đơn chính xác.
+- coffee_increment_discount_usage: tăng lượt dùng mã giảm giá.
+- coffee_guard_order_history: bảo vệ lịch sử trạng thái liên tục.
+- coffee_guard_product_review: kiểm tra sao, độ dài review, trạng thái user/sản phẩm.
+- coffee_create_order_notification: tạo thông báo khi đặt đơn, đang giao, hoàn thành.
+- coffee_touch_updated_at: cập nhật timestamp khi dữ liệu thay đổi.
+
+8. MIGRATION DATABASE
+---------------------
+- V1: Baseline coffee ordering.
+- V2: Categories, discount snapshots và account activation.
+- V3: Customer profile và product reviews.
+- V4: Delivery area creation và unique tên khu vực.
+- V5: Customer order notifications.
+
+9. BẢO MẬT VÀ TÍNH TOÀN VẸN
+----------------------------
+- Mật khẩu lưu dạng SHA-256 hash thông qua pgcrypto PostgreSQL.
+- Số điện thoại và email là unique.
+- Phân quyền role: 0 = User, 1 = Admin.
+- Repository lọc đơn hàng/thông báo theo user_id.
+- Trigger bảo vệ dữ liệu khi thao tác trực tiếp từ database.
+- Đơn hàng lưu snapshot để thay đổi menu/phí/mã giảm giá sau này không làm sai lịch sử.
+- Quan hệ foreign key và index dùng để bảo toàn liên kết và tăng tốc truy vấn.
+
+10. KIỂM THỬ ĐÃ THỰC HIỆN
+-------------------------
+- flutter analyze: không có lỗi.
+- flutter test: 12 test đạt.
+- flutter build windows --debug: build thành công.
+- Các test tích hợp PostgreSQL kiểm tra:
+  + Đăng ký trùng, khu vực giao hàng và snapshot đơn.
+  + Workflow trạng thái đơn hàng và hủy đơn.
+  + Danh mục, sản phẩm, mã giảm giá và account lock.
+  + Cập nhật hồ sơ, đổi số điện thoại/mật khẩu.
+  + Tạo/cập nhật review.
+  + Admin thêm/tạm ngừng khu vực và visibility với user.
+  + Ba thông báo: đặt đơn, đang giao, giao thành công; đọc/đọc tất cả.
+
+11. HƯỚNG DẪN DEMO KHI BÁO CÁO
+------------------------------
+1) Đăng nhập user, mở Menu và thêm món vào giỏ.
+2) Vào Checkout, áp mã giảm giá (nếu có), tạo đơn.
+3) Mở chuông để thấy thông báo đặt đơn.
+4) Đăng nhập admin, mở quản lý đơn và đổi trạng thái lần lượt.
+5) Đăng nhập lại user hoặc chờ badge cập nhật để thấy thông báo đang giao/hoàn thành.
+6) Chạm thông báo hoàn thành, chọn món đã mua và gửi đánh giá.
+7) Đăng nhập admin để demo thêm khu vực, mã giảm giá, danh mục hoặc khóa user.
+
+12. KẾT LUẬN
+------------
+Coffee Việt 24H đã có đầy đủ luồng đặt hàng end-to-end cho User và quản trị
+vận hành cho Admin. Hệ thống đảm bảo dữ liệu bằng PostgreSQL, trigger, snapshot
+đơn hàng, phân quyền và test tích hợp thực tế. Ứng dụng sẵn sàng để tiếp tục
+mở rộng các tính năng như thanh toán online thực tế, FCM push notification,
+ảnh cloud và dashboard phân tích nâng cao.

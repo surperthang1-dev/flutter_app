@@ -36,6 +36,7 @@ class AdminRepository {
   final DatabaseConfig config;
 
   Future<AdminSummary> fetchSummary() async {
+    // Dashboard admin lấy các chỉ số menu, user, đơn và doanh thu bằng một truy vấn tổng hợp.
     final connection = await _open();
     try {
       final rows = await connection.execute('''
@@ -66,6 +67,7 @@ class AdminRepository {
   }
 
   Future<List<AdminOrder>> fetchOrders() async {
+    // Tái sử dụng OrderRepository để admin và user dùng chung cấu trúc snapshot đơn.
     return OrderRepository(config: config).fetchAllOrders();
   }
 
@@ -97,6 +99,7 @@ class AdminRepository {
   }
 
   Future<void> saveProduct(Product product) async {
+    // Upsert cho phép admin thêm mới hoặc sửa món; trigger DB tự đồng bộ tên danh mục.
     final connection = await _open();
     try {
       await connection.execute(
@@ -157,6 +160,7 @@ class AdminRepository {
   }
 
   Future<void> deleteProduct(String id) async {
+    // Xóa sản phẩm chỉ áp dụng menu hiện tại; order_items đã lưu snapshot không bị ảnh hưởng.
     final connection = await _open();
     try {
       await connection.execute(

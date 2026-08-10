@@ -22,6 +22,7 @@ class CompletedOrderReviewScreen extends StatefulWidget {
 
 class _CompletedOrderReviewScreenState
     extends State<CompletedOrderReviewScreen> {
+  // Luồng này chỉ được mở từ notification hoàn thành để review các món trong đơn đã giao.
   final _orderRepository = const OrderRepository();
   final _productRepository = const PostgresProductRepository();
   Future<_CompletedOrderReviewData>? _future;
@@ -37,6 +38,7 @@ class _CompletedOrderReviewScreenState
   }
 
   Future<_CompletedOrderReviewData> _load(String userId) async {
+    // Kiểm tra quyền sở hữu + trạng thái completed trước khi cho user chọn món để review.
     final results = await Future.wait<Object?>([
       _orderRepository.fetchOrderForUser(
         userId: userId,
@@ -71,6 +73,7 @@ class _CompletedOrderReviewScreenState
   }
 
   void _openProduct(Product product) {
+    // Màn chi tiết món đã có form review nên không cần tạo form trùng lặp ở đây.
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => ProductDetailScreen(product: product)),
     );

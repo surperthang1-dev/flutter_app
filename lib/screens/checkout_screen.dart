@@ -21,6 +21,7 @@ class CheckoutScreen extends StatefulWidget {
 }
 
 class _CheckoutScreenState extends State<CheckoutScreen> {
+  // Gom repository đặt đơn, mã giảm giá và state thanh toán trên cùng một màn.
   final _orderRepository = const OrderRepository();
   final _discountRepository = const DiscountRepository();
   final _noteController = TextEditingController();
@@ -70,6 +71,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   Future<void> _loadCheckout() async {
+    // Snapshot chứa địa chỉ, khu vực và phí giao hàng hiện hành từ PostgreSQL.
     final user = AuthScope.of(context).user;
     if (user == null) return;
     setState(() {
@@ -93,6 +95,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   Future<void> _placeOrder() async {
+    // Chỉ clear giỏ sau khi createOrder trả về thành công; DB sẽ tạo notification đặt hàng.
     final user = AuthScope.of(context).user;
     final cart = CartScope.of(context);
     if (user == null ||
@@ -693,3 +696,5 @@ class _PaymentOption {
   final String description;
   final IconData icon;
 }
+
+// Đổi tài khoản phải tải lại snapshot để không dùng địa chỉ/phí của user cũ.

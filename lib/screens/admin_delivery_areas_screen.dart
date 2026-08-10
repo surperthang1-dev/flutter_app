@@ -16,6 +16,7 @@ class AdminDeliveryAreasScreen extends StatefulWidget {
 }
 
 class _AdminDeliveryAreasScreenState extends State<AdminDeliveryAreasScreen> {
+  // Admin xem cả khu vực inactive, trong khi phía user chỉ lấy các khu vực active.
   final _repository = const DeliveryAreaRepository();
   final _searchController = TextEditingController();
   late Future<List<DeliveryArea>> _future;
@@ -64,6 +65,7 @@ class _AdminDeliveryAreasScreenState extends State<AdminDeliveryAreasScreen> {
   }
 
   Future<void> _create() async {
+    // Form thêm khu vực trả DeliveryArea mới để refresh danh sách admin ngay sau khi lưu.
     final created = await showModalBottomSheet<DeliveryArea>(
       context: context,
       isScrollControlled: true,
